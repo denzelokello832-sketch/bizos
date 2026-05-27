@@ -63,7 +63,7 @@ async function askAI(system, message) {
 // ── PAYSTACK ──────────────────────────────────────────────────────────────────
 function paystack(email, amount, onSuccess) {
   const h = window.PaystackPop?.setup({
-    key: "pk_test_YOUR_PAYSTACK_KEY",
+    key: "pk_test_08c5d5107aa8861893580f4c2b9acc055efb457as",
     email, amount: amount * 100, currency: "NGN",
     callback: r => r.status === "success" && onSuccess(r.reference),
     onClose: () => {},
