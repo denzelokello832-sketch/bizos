@@ -1,46 +1,66 @@
 import { useState, useEffect, useRef } from "react";
+import { initializeApp } from "firebase/app";
+import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "firebase/auth";
+import { getFirestore, doc, setDoc, getDoc, updateDoc, collection, getDocs, deleteDoc } from "firebase/firestore";
 
-// ── FONTS ─────────────────────────────────────────────────────────────────────
-const Fonts = () => (
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Fraunces:ital,wght@0,700;0,900;1,600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
-);
+// ── FIREBASE CONFIG ───────────────────────────────────────────────────────────
+const firebaseConfig = {
+  apiKey: "AIzaSyAZsWz9OjwRVfkJwmlSVdhqOwDXNB2iqJs",
+  authDomain: "bizos-dec27.firebaseapp.com",
+  projectId: "bizos-dec27",
+  storageBucket: "bizos-dec27.firebasestorage.app",
+  messagingSenderId: "126937721886",
+  appId: "1:126937721886:web:cc8e9d376804f5788cd20f"
+};
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
 
 // ── THEME ─────────────────────────────────────────────────────────────────────
 const C = {
-  bg: "#f7f4ef",
-  surface: "#ffffff",
-  dark: "#1a1a18",
-  border: "#e8e3db",
-  accent: "#1a6b3c",
-  accentLight: "#e8f5ee",
-  accentBright: "#22c55e",
-  gold: "#c9831a",
-  goldLight: "#fef3e2",
-  red: "#dc2626",
-  redLight: "#fef2f2",
-  blue: "#1d4ed8",
-  blueLight: "#eff6ff",
-  text: "#1a1a18",
-  muted: "#78716c",
-  faint: "#f0ece6",
-  font: "'Plus Jakarta Sans', sans-serif",
-  display: "'Fraunces', serif",
-  mono: "'JetBrains Mono', monospace",
-};
-
-// ── STORAGE ───────────────────────────────────────────────────────────────────
-const db = {
-  get: (k, d = null) => { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch { return d; } },
-  set: (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
+  bg: "#f7f4ef", surface: "#ffffff", dark: "#1a1a18", border: "#e8e3db",
+  accent: "#1a6b3c", accentLight: "#e8f5ee", accentBright: "#22c55e",
+  gold: "#c9831a", goldLight: "#fef3e2", red: "#dc2626", redLight: "#fef2f2",
+  blue: "#1d4ed8", text: "#1a1a18", muted: "#78716c", faint: "#f0ece6",
+  font: "'Plus Jakarta Sans', sans-serif", display: "'Fraunces', serif", mono: "'JetBrains Mono', monospace",
 };
 
 // ── UTILS ─────────────────────────────────────────────────────────────────────
 const uid = () => Math.random().toString(36).slice(2, 9);
 const today = () => new Date().toISOString().split("T")[0];
 const now = () => new Date().toISOString();
-const fmt = (n, curr = "₦") => `${curr}${Number(n || 0).toLocaleString("en-NG")}`;
-const fmtDate = (d) => d ? new Date(d).toLocaleDateString("en-NG", { day: "numeric", month: "short", year: "numeric" }) : "—";
+const fmt = (n, curr = "KSh") => `${curr} ${Number(n || 0).toLocaleString("en-KE")}`;
+const fmtDate = (d) => d ? new Date(d).toLocaleDateString("en-KE", { day: "numeric", month: "short", year: "numeric" }) : "—";
 const thisMonth = () => new Date().toISOString().slice(0, 7);
+
+// ── FIREBASE HELPERS ──────────────────────────────────────────────────────────
+async function saveUserData(userId, key, data) {
+  try {
+    await setDoc(doc(db, "users", userId, "data", key), { value: JSON.stringify(data), updatedAt: now() });
+  } catch (e) { console.error("Save error:", e); }
+}
+
+async function getUserData(userId, key, defaultVal) {
+  try {
+    const snap = await getDoc(doc(db, "users", userId, "data", key));
+    if (snap.exists()) return JSON.parse(snap.data().value);
+    return defaultVal;
+  } catch (e) { return defaultVal; }
+}
+
+async function setUserPro(userId, isPro) {
+  try {
+    await setDoc(doc(db, "users", userId), { isPro, updatedAt: now() }, { merge: true });
+  } catch (e) { console.error("Pro update error:", e); }
+}
+
+async function getUserProfile(userId) {
+  try {
+    const snap = await getDoc(doc(db, "users", userId));
+    return snap.exists() ? snap.data() : {};
+  } catch (e) { return {}; }
+}
 
 // ── CLAUDE AI ─────────────────────────────────────────────────────────────────
 async function askAI(system, message) {
@@ -49,10 +69,8 @@ async function askAI(system, message) {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        model: "claude-sonnet-4-20250514",
-        max_tokens: 1000,
-        system,
-        messages: [{ role: "user", content: message }],
+        model: "claude-sonnet-4-20250514", max_tokens: 1000,
+        system, messages: [{ role: "user", content: message }],
       }),
     });
     const j = await res.json();
@@ -61,10 +79,10 @@ async function askAI(system, message) {
 }
 
 // ── PAYSTACK ──────────────────────────────────────────────────────────────────
-function paystack(email, amount, onSuccess) {
+function openPaystack(email, amount, onSuccess) {
   const h = window.PaystackPop?.setup({
-    key: "pk_test_08c5d5107aa8861893580f4c2b9acc055efb457as",
-    email, amount: amount * 100, currency: "NGN",
+    key: "pk_test_08c5d5107aa8861893580f4c2b9acc055efb457a",
+    email, amount: amount * 100, currency: "KES",
     callback: r => r.status === "success" && onSuccess(r.reference),
     onClose: () => {},
   });
@@ -74,6 +92,7 @@ function paystack(email, amount, onSuccess) {
 // ══════════════════════════════════════════════════════
 // UI PRIMITIVES
 // ══════════════════════════════════════════════════════
+const Fonts = () => <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Fraunces:wght@700;900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />;
 
 const Btn = ({ children, onClick, variant = "primary", size = "md", full, disabled, style = {} }) => {
   const sizes = { sm: { padding: "6px 14px", fontSize: 12 }, md: { padding: "10px 20px", fontSize: 14 }, lg: { padding: "14px 28px", fontSize: 16 } };
@@ -86,7 +105,7 @@ const Btn = ({ children, onClick, variant = "primary", size = "md", full, disabl
   };
   return (
     <button onClick={disabled ? undefined : onClick} disabled={disabled}
-      style={{ ...sizes[size], ...vars[variant], borderRadius: 10, cursor: disabled ? "not-allowed" : "pointer", fontFamily: C.font, fontWeight: 700, display: "inline-flex", alignItems: "center", gap: 6, transition: "all 0.15s", opacity: disabled ? 0.5 : 1, width: full ? "100%" : "auto", justifyContent: "center", letterSpacing: "-0.01em", ...style }}
+      style={{ ...sizes[size], ...vars[variant], borderRadius: 10, cursor: disabled ? "not-allowed" : "pointer", fontFamily: C.font, fontWeight: 700, display: "inline-flex", alignItems: "center", gap: 6, transition: "all 0.15s", opacity: disabled ? 0.5 : 1, width: full ? "100%" : "auto", justifyContent: "center", ...style }}
       onMouseEnter={e => { if (!disabled) e.currentTarget.style.filter = "brightness(0.92)"; }}
       onMouseLeave={e => { e.currentTarget.style.filter = "none"; }}>
       {children}
@@ -95,60 +114,53 @@ const Btn = ({ children, onClick, variant = "primary", size = "md", full, disabl
 };
 
 const Card = ({ children, style = {}, onClick }) => (
-  <div onClick={onClick} style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 16, padding: 20, cursor: onClick ? "pointer" : "default", transition: onClick ? "box-shadow 0.15s" : undefined, ...style }}
-    onMouseEnter={e => { if (onClick) e.currentTarget.style.boxShadow = "0 4px 20px rgba(0,0,0,0.08)"; }}
-    onMouseLeave={e => { if (onClick) e.currentTarget.style.boxShadow = "none"; }}>
+  <div onClick={onClick} style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 16, padding: 20, cursor: onClick ? "pointer" : "default", ...style }}>
     {children}
   </div>
 );
 
-const Badge = ({ children, color = C.accent, bg }) => (
-  <span style={{ background: bg || `${color}18`, color, border: `1px solid ${color}30`, borderRadius: 100, padding: "3px 10px", fontSize: 11, fontFamily: C.mono, fontWeight: 500, whiteSpace: "nowrap" }}>
+const Badge = ({ children, color = C.accent }) => (
+  <span style={{ background: `${color}18`, color, border: `1px solid ${color}30`, borderRadius: 100, padding: "3px 10px", fontSize: 11, fontFamily: C.mono, fontWeight: 500 }}>
     {children}
   </span>
 );
 
-const Input = ({ label, value, onChange, placeholder, type = "text", prefix, required }) => (
+const Input = ({ label, value, onChange, placeholder, type = "text", required }) => (
   <div style={{ marginBottom: 14 }}>
-    {label && <div style={{ fontSize: 12, fontWeight: 600, color: C.muted, marginBottom: 6, fontFamily: C.font }}>{label}{required && <span style={{ color: C.red }}> *</span>}</div>}
-    <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
-      {prefix && <span style={{ position: "absolute", left: 12, color: C.muted, fontSize: 14, fontFamily: C.mono }}>{prefix}</span>}
-      <input type={type} value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder}
-        style={{ width: "100%", boxSizing: "border-box", border: `1.5px solid ${C.border}`, borderRadius: 10, padding: `10px ${prefix ? "14px 10px 36px" : "14px 10px"}`, fontFamily: C.font, fontSize: 14, color: C.text, background: C.bg, outline: "none", transition: "border-color 0.15s" }}
-        onFocus={e => e.target.style.borderColor = C.accent}
-        onBlur={e => e.target.style.borderColor = C.border} />
-    </div>
+    {label && <div style={{ fontSize: 12, fontWeight: 600, color: C.muted, marginBottom: 6 }}>{label}{required && <span style={{ color: C.red }}> *</span>}</div>}
+    <input type={type} value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder}
+      style={{ width: "100%", boxSizing: "border-box", border: `1.5px solid ${C.border}`, borderRadius: 10, padding: "10px 14px", fontFamily: C.font, fontSize: 14, color: C.text, background: C.bg, outline: "none" }}
+      onFocus={e => e.target.style.borderColor = C.accent}
+      onBlur={e => e.target.style.borderColor = C.border} />
   </div>
 );
 
-const Select = ({ label, value, onChange, options, required }) => (
+const Select = ({ label, value, onChange, options }) => (
   <div style={{ marginBottom: 14 }}>
-    {label && <div style={{ fontSize: 12, fontWeight: 600, color: C.muted, marginBottom: 6 }}>{label}{required && <span style={{ color: C.red }}> *</span>}</div>}
+    {label && <div style={{ fontSize: 12, fontWeight: 600, color: C.muted, marginBottom: 6 }}>{label}</div>}
     <select value={value} onChange={e => onChange(e.target.value)}
-      style={{ width: "100%", border: `1.5px solid ${C.border}`, borderRadius: 10, padding: "10px 14px", fontFamily: C.font, fontSize: 14, color: C.text, background: C.bg, outline: "none" }}
-      onFocus={e => e.target.style.borderColor = C.accent}
-      onBlur={e => e.target.style.borderColor = C.border}>
+      style={{ width: "100%", border: `1.5px solid ${C.border}`, borderRadius: 10, padding: "10px 14px", fontFamily: C.font, fontSize: 14, color: C.text, background: C.bg, outline: "none" }}>
       {options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
     </select>
   </div>
 );
 
-const Stat = ({ label, value, sub, icon, color = C.accent, bg }) => (
-  <Card style={{ background: bg || C.surface }}>
-    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
+const Stat = ({ label, value, sub, icon, color = C.accent }) => (
+  <Card>
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>
       <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: "0.08em" }}>{label}</div>
       <span style={{ fontSize: 20 }}>{icon}</span>
     </div>
-    <div style={{ fontFamily: C.display, fontSize: 28, fontWeight: 900, color, lineHeight: 1, marginBottom: 4 }}>{value}</div>
+    <div style={{ fontFamily: C.display, fontSize: 26, fontWeight: 900, color, lineHeight: 1, marginBottom: 4 }}>{value}</div>
     {sub && <div style={{ fontSize: 12, color: C.muted, marginTop: 6 }}>{sub}</div>}
   </Card>
 );
 
 const Modal = ({ title, onClose, children, width = 520 }) => (
   <div style={{ position: "fixed", inset: 0, background: "rgba(26,26,24,0.6)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: 20 }} onClick={onClose}>
-    <div style={{ background: C.surface, borderRadius: 20, padding: 32, width: "100%", maxWidth: width, maxHeight: "90vh", overflowY: "auto", boxShadow: "0 20px 60px rgba(0,0,0,0.2)" }} onClick={e => e.stopPropagation()}>
+    <div style={{ background: C.surface, borderRadius: 20, padding: 32, width: "100%", maxWidth: width, maxHeight: "90vh", overflowY: "auto" }} onClick={e => e.stopPropagation()}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
-        <div style={{ fontFamily: C.display, fontSize: 20, fontWeight: 700, color: C.text }}>{title}</div>
+        <div style={{ fontFamily: C.display, fontSize: 20, fontWeight: 700 }}>{title}</div>
         <button onClick={onClose} style={{ background: C.faint, border: "none", borderRadius: 8, width: 32, height: 32, cursor: "pointer", fontSize: 16, color: C.muted }}>✕</button>
       </div>
       {children}
@@ -160,104 +172,65 @@ const EmptyState = ({ icon, title, desc, action, onAction }) => (
   <div style={{ textAlign: "center", padding: "60px 24px" }}>
     <div style={{ fontSize: 48, marginBottom: 16 }}>{icon}</div>
     <div style={{ fontFamily: C.display, fontSize: 20, fontWeight: 700, marginBottom: 8 }}>{title}</div>
-    <div style={{ color: C.muted, fontSize: 14, marginBottom: 24, maxWidth: 300, margin: "0 auto 24px" }}>{desc}</div>
+    <div style={{ color: C.muted, fontSize: 14, marginBottom: 24 }}>{desc}</div>
     {action && <Btn onClick={onAction}>{action}</Btn>}
   </div>
 );
 
+const Loader = ({ text = "Loading..." }) => (
+  <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100vh", background: C.bg, fontFamily: C.font, color: C.muted, fontSize: 14 }}>
+    <div style={{ textAlign: "center" }}>
+      <div style={{ fontSize: 32, marginBottom: 16 }}>🌍</div>
+      <div>{text}</div>
+    </div>
+  </div>
+);
+
 // ══════════════════════════════════════════════════════
-// LANDING PAGE
+// LANDING
 // ══════════════════════════════════════════════════════
 function Landing({ onStart }) {
   return (
-    <div style={{ minHeight: "100vh", background: C.dark, color: "#fff", fontFamily: C.font, overflow: "hidden" }}>
+    <div style={{ minHeight: "100vh", background: C.dark, color: "#fff", fontFamily: C.font }}>
       <Fonts />
       <script src="https://js.paystack.co/v1/inline.js" />
-
-      {/* Hero section */}
-      <div style={{ position: "relative", overflow: "hidden" }}>
-        {/* Decorative circles */}
-        <div style={{ position: "absolute", width: 600, height: 600, borderRadius: "50%", background: "radial-gradient(circle, rgba(26,107,60,0.3) 0%, transparent 70%)", top: -200, right: -100, pointerEvents: "none" }} />
-        <div style={{ position: "absolute", width: 400, height: 400, borderRadius: "50%", background: "radial-gradient(circle, rgba(201,131,26,0.2) 0%, transparent 70%)", bottom: -100, left: -100, pointerEvents: "none" }} />
-
-        {/* Nav */}
-        <nav style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "24px 48px", position: "relative", zIndex: 10 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <div style={{ width: 36, height: 36, background: C.accent, borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>🌍</div>
-            <div style={{ fontFamily: C.display, fontSize: 22, fontWeight: 900, color: "#fff" }}>BizOS</div>
-          </div>
-          <div style={{ display: "flex", gap: 12 }}>
-            <Btn variant="ghost" onClick={onStart} style={{ color: "#fff", borderColor: "rgba(255,255,255,0.2)" }}>Login</Btn>
-            <Btn onClick={onStart} style={{ background: C.accentBright, color: "#000" }}>Start Free</Btn>
-          </div>
-        </nav>
-
-        {/* Hero */}
-        <div style={{ textAlign: "center", padding: "70px 24px 80px", maxWidth: 820, margin: "0 auto", position: "relative", zIndex: 10 }}>
-          <div style={{ display: "inline-flex", alignItems: "center", gap: 8, background: "rgba(34,197,94,0.15)", border: "1px solid rgba(34,197,94,0.3)", borderRadius: 100, padding: "6px 18px", fontSize: 12, color: C.accentBright, fontFamily: C.mono, marginBottom: 28 }}>
-            🌍 Built for African Businesses
-          </div>
-          <h1 style={{ fontFamily: C.display, fontSize: "clamp(44px, 7vw, 80px)", fontWeight: 900, lineHeight: 1.05, margin: "0 0 20px", letterSpacing: "-0.03em" }}>
-            Run your entire<br />
-            <span style={{ color: C.accentBright }}>business in one place.</span>
-          </h1>
-          <p style={{ fontSize: 18, color: "rgba(255,255,255,0.6)", maxWidth: 560, margin: "0 auto 40px", lineHeight: 1.7 }}>
-            Inventory. Sales. Customers. Staff. AI insights. Everything your shop needs — without the spreadsheets, the guesswork, or the stress.
-          </p>
-          <div style={{ display: "flex", gap: 16, justifyContent: "center", flexWrap: "wrap" }}>
-            <Btn size="lg" onClick={onStart} style={{ background: C.accentBright, color: "#000", fontSize: 16 }}>Start Free Today →</Btn>
-          </div>
-          <p style={{ color: "rgba(255,255,255,0.3)", fontSize: 13, marginTop: 16, fontFamily: C.mono }}>Free forever · No credit card · Upgrade anytime</p>
+      <div style={{ position: "fixed", inset: 0, background: "radial-gradient(ellipse 80% 50% at 50% 0%, rgba(34,197,94,0.1) 0%, transparent 70%)", pointerEvents: "none" }} />
+      <nav style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "24px 48px", position: "relative", zIndex: 10 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <div style={{ width: 36, height: 36, background: C.accent, borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>🌍</div>
+          <div style={{ fontFamily: C.display, fontSize: 22, fontWeight: 900 }}>BizOS</div>
         </div>
+        <div style={{ display: "flex", gap: 12 }}>
+          <Btn variant="ghost" onClick={onStart} style={{ color: "#fff", borderColor: "rgba(255,255,255,0.2)" }}>Login</Btn>
+          <Btn onClick={onStart} style={{ background: C.accentBright, color: "#000" }}>Start Free</Btn>
+        </div>
+      </nav>
+      <div style={{ textAlign: "center", padding: "70px 24px 80px", maxWidth: 820, margin: "0 auto", position: "relative", zIndex: 10 }}>
+        <div style={{ display: "inline-flex", alignItems: "center", gap: 8, background: "rgba(34,197,94,0.15)", border: "1px solid rgba(34,197,94,0.3)", borderRadius: 100, padding: "6px 18px", fontSize: 12, color: C.accentBright, fontFamily: C.mono, marginBottom: 28 }}>
+          🌍 Built for African Businesses
+        </div>
+        <h1 style={{ fontFamily: C.display, fontSize: "clamp(44px, 7vw, 80px)", fontWeight: 900, lineHeight: 1.05, margin: "0 0 20px", letterSpacing: "-0.03em" }}>
+          Run your entire<br /><span style={{ color: C.accentBright }}>business in one place.</span>
+        </h1>
+        <p style={{ fontSize: 18, color: "rgba(255,255,255,0.6)", maxWidth: 560, margin: "0 auto 40px", lineHeight: 1.7 }}>
+          Inventory. Sales. Customers. Staff. AI insights. Everything your shop needs — without the spreadsheets, the guesswork, or the stress.
+        </p>
+        <Btn size="lg" onClick={onStart} style={{ background: C.accentBright, color: "#000" }}>Start Free Today →</Btn>
+        <p style={{ color: "rgba(255,255,255,0.3)", fontSize: 13, marginTop: 16, fontFamily: C.mono }}>Free forever · No credit card · Upgrade anytime</p>
       </div>
-
-      {/* Features */}
-      <div style={{ background: C.bg, padding: "80px 48px" }}>
-        <div style={{ textAlign: "center", marginBottom: 56 }}>
-          <h2 style={{ fontFamily: C.display, fontSize: 40, fontWeight: 900, color: C.text, margin: "0 0 12px" }}>Everything your business needs</h2>
-          <p style={{ color: C.muted, fontSize: 16, maxWidth: 480, margin: "0 auto" }}>Five powerful tools in one app. No more switching between WhatsApp, paper books, and calculators.</p>
-        </div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 20, maxWidth: 1100, margin: "0 auto" }}>
-          {[
-            { icon: "📦", title: "Inventory Management", desc: "Track every product, get low-stock alerts before you run out, know your real stock value at any time.", color: C.accent },
-            { icon: "💰", title: "Sales & Revenue", desc: "Record every sale, track daily revenue, see which products make you the most money.", color: C.gold },
-            { icon: "👥", title: "Customer Records", desc: "Know every customer by name. Track who owes you, who's loyal, and who to follow up with.", color: C.blue },
-            { icon: "👷", title: "Staff & Expenses", desc: "Track staff salaries, daily expenses, and stop losing money you can't account for.", color: "#7c3aed" },
-            { icon: "🧠", title: "AI Business Insights", desc: "Ask your AI anything. 'What's my best selling product?' 'Which day do I sell the most?' It knows.", color: C.accentBright },
-          ].map(f => (
-            <Card key={f.title} style={{ borderTop: `3px solid ${f.color}` }}>
-              <div style={{ fontSize: 32, marginBottom: 14 }}>{f.icon}</div>
-              <div style={{ fontFamily: C.display, fontSize: 17, fontWeight: 700, marginBottom: 8, color: C.text }}>{f.title}</div>
-              <div style={{ fontSize: 14, color: C.muted, lineHeight: 1.7 }}>{f.desc}</div>
-            </Card>
-          ))}
-        </div>
-      </div>
-
-      {/* Pricing */}
-      <div style={{ background: C.dark, padding: "80px 48px", textAlign: "center" }}>
-        <h2 style={{ fontFamily: C.display, fontSize: 36, fontWeight: 900, color: "#fff", margin: "0 0 12px" }}>Simple pricing</h2>
-        <p style={{ color: "rgba(255,255,255,0.4)", marginBottom: 48, fontSize: 15 }}>No surprises. Cancel anytime.</p>
-        <div style={{ display: "flex", gap: 24, justifyContent: "center", flexWrap: "wrap", maxWidth: 800, margin: "0 auto" }}>
-          {[
-            { name: "Free", price: "₦0", period: "forever", features: ["50 products", "3 customers", "Basic sales tracking", "7-day history"], cta: "Start Free", variant: "ghost" },
-            { name: "Business", price: "₦9,000", period: "/month", features: ["Unlimited products", "Unlimited customers", "Full sales history", "AI insights", "Staff tracking", "Export reports"], cta: "Go Business", variant: "gold", highlight: true },
-          ].map(p => (
-            <div key={p.name} style={{ background: p.highlight ? C.accent : "rgba(255,255,255,0.05)", border: `1px solid ${p.highlight ? C.accent : "rgba(255,255,255,0.1)"}`, borderRadius: 20, padding: 32, flex: 1, minWidth: 260, maxWidth: 340 }}>
-              <div style={{ fontSize: 13, fontWeight: 700, color: p.highlight ? "rgba(255,255,255,0.7)" : "rgba(255,255,255,0.4)", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 16 }}>{p.name}</div>
-              <div style={{ fontFamily: C.display, fontSize: 40, fontWeight: 900, color: "#fff", marginBottom: 4 }}>{p.price}<span style={{ fontSize: 16, fontWeight: 400, opacity: 0.6 }}>{p.period}</span></div>
-              <div style={{ margin: "24px 0" }}>{p.features.map(f => <div key={f} style={{ color: "rgba(255,255,255,0.75)", fontSize: 14, padding: "5px 0" }}>✓ {f}</div>)}</div>
-              <Btn full onClick={onStart} variant={p.highlight ? "secondary" : "ghost"} style={{ background: p.highlight ? "#fff" : "transparent", color: p.highlight ? C.accent : "rgba(255,255,255,0.6)", borderColor: "rgba(255,255,255,0.2)" }}>{p.cta}</Btn>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Footer CTA */}
-      <div style={{ background: C.accentBright, padding: "60px 48px", textAlign: "center" }}>
-        <h2 style={{ fontFamily: C.display, fontSize: 36, fontWeight: 900, color: "#000", margin: "0 0 16px" }}>Your competitors are already going digital.</h2>
-        <p style={{ color: "rgba(0,0,0,0.6)", fontSize: 16, marginBottom: 32 }}>Don't get left behind. Start managing your business properly today.</p>
-        <Btn size="lg" onClick={onStart} style={{ background: "#000", color: "#fff" }}>Start Free — Takes 60 Seconds →</Btn>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 20, maxWidth: 900, margin: "0 auto", padding: "0 24px 80px" }}>
+        {[
+          { icon: "📦", title: "Inventory", desc: "Track every product. Get low-stock alerts before you run out." },
+          { icon: "💰", title: "Sales Tracking", desc: "Record every sale. Know exactly how much you make daily." },
+          { icon: "👥", title: "Customers", desc: "Know every customer. Track who owes you, who's loyal." },
+          { icon: "🧠", title: "AI Advisor", desc: "Ask anything. 'What's my best product?' It knows your data." },
+        ].map(f => (
+          <Card key={f.title} style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderTop: `3px solid ${C.accentBright}` }}>
+            <div style={{ fontSize: 28, marginBottom: 12 }}>{f.icon}</div>
+            <div style={{ fontFamily: C.display, fontSize: 16, fontWeight: 700, marginBottom: 8, color: "#fff" }}>{f.title}</div>
+            <div style={{ fontSize: 13, color: "rgba(255,255,255,0.5)", lineHeight: 1.6 }}>{f.desc}</div>
+          </Card>
+        ))}
       </div>
     </div>
   );
@@ -268,67 +241,71 @@ function Landing({ onStart }) {
 // ══════════════════════════════════════════════════════
 function Auth({ onAuth }) {
   const [mode, setMode] = useState("signup");
-  const [form, setForm] = useState({ name: "", business: "", phone: "", email: "", pass: "", currency: "₦" });
+  const [form, setForm] = useState({ name: "", business: "", phone: "", email: "", pass: "", currency: "KSh" });
   const [err, setErr] = useState("");
+  const [loading, setLoading] = useState(false);
   const f = k => v => setForm(p => ({ ...p, [k]: v }));
 
-  function submit() {
-    setErr("");
-    if (mode === "signup") {
-      if (!form.name || !form.business || !form.email || !form.pass) return setErr("Please fill all required fields.");
-      const users = db.get("biz_users", {});
-      if (users[form.email]) return setErr("Account exists. Please login.");
-      const user = { id: uid(), name: form.name, business: form.business, phone: form.phone, email: form.email, currency: form.currency, isPro: false, createdAt: today() };
-      users[form.email] = { ...user, pass: form.pass };
-      db.set("biz_users", users);
-      onAuth(user);
-    } else {
-      if (!form.email || !form.pass) return setErr("Enter email and password.");
-      const users = db.get("biz_users", {});
-      const u = users[form.email];
-      if (!u || u.pass !== form.pass) return setErr("Wrong email or password.");
-      const { pass: _, ...user } = u;
-      onAuth(user);
+  async function submit() {
+    setErr(""); setLoading(true);
+    try {
+      if (mode === "signup") {
+        if (!form.name || !form.business || !form.email || !form.pass) { setErr("Fill all required fields."); setLoading(false); return; }
+        const cred = await createUserWithEmailAndPassword(auth, form.email, form.pass);
+        const userData = { id: cred.user.uid, name: form.name, business: form.business, phone: form.phone, email: form.email, currency: form.currency, isPro: false, createdAt: today() };
+        await setDoc(doc(db, "users", cred.user.uid), userData);
+        onAuth(userData);
+      } else {
+        if (!form.email || !form.pass) { setErr("Enter email and password."); setLoading(false); return; }
+        const cred = await signInWithEmailAndPassword(auth, form.email, form.pass);
+        const profile = await getUserProfile(cred.user.uid);
+        onAuth({ ...profile, id: cred.user.uid });
+      }
+    } catch (e) {
+      setErr(e.code === "auth/email-already-in-use" ? "Account exists. Login instead." : e.code === "auth/wrong-password" || e.code === "auth/user-not-found" ? "Wrong email or password." : e.message);
     }
+    setLoading(false);
   }
 
   return (
     <div style={{ minHeight: "100vh", background: C.bg, display: "flex", fontFamily: C.font }}>
       <Fonts />
-      {/* Left panel */}
       <div style={{ width: "42%", background: C.dark, padding: 48, display: "flex", flexDirection: "column", justifyContent: "center" }}>
-        <div style={{ fontFamily: C.display, fontSize: 28, fontWeight: 900, color: "#fff", marginBottom: 8 }}>
-          <span style={{ color: C.accentBright }}>BizOS</span>
+        <div style={{ fontFamily: C.display, fontSize: 28, fontWeight: 900, color: "#fff" }}>
+          🌍 <span style={{ color: C.accentBright }}>BizOS</span>
         </div>
-        <p style={{ color: "rgba(255,255,255,0.5)", fontSize: 15, lineHeight: 1.8, marginTop: 24, maxWidth: 320 }}>
-          The operating system for African businesses. Track inventory, sales, customers and staff — all in one place.
+        <p style={{ color: "rgba(255,255,255,0.4)", fontSize: 14, lineHeight: 1.8, marginTop: 24, maxWidth: 300 }}>
+          The operating system for African businesses. Track inventory, sales, and customers — with AI insights.
         </p>
-        <div style={{ marginTop: 48, display: "flex", flexDirection: "column", gap: 16 }}>
-          {["📦 Real-time inventory tracking", "💰 Daily sales & revenue", "🧠 AI business insights", "👥 Customer management"].map(f => (
-            <div key={f} style={{ color: "rgba(255,255,255,0.65)", fontSize: 14 }}>{f}</div>
+        <div style={{ marginTop: 40, display: "flex", flexDirection: "column", gap: 14 }}>
+          {["📦 Real-time inventory", "💰 Daily sales tracking", "🧠 AI business insights", "☁️ Data saved to cloud"].map(f => (
+            <div key={f} style={{ color: "rgba(255,255,255,0.6)", fontSize: 13 }}>{f}</div>
           ))}
         </div>
       </div>
-
-      {/* Right panel */}
       <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: 48 }}>
         <div style={{ width: "100%", maxWidth: 400 }}>
           <h2 style={{ fontFamily: C.display, fontSize: 28, fontWeight: 900, marginBottom: 6 }}>
             {mode === "signup" ? "Create your account" : "Welcome back"}
           </h2>
           <p style={{ color: C.muted, fontSize: 14, marginBottom: 28 }}>
-            {mode === "signup" ? "Start managing your business better today." : "Sign in to your BizOS account."}
+            {mode === "signup" ? "Start managing your business today." : "Sign in to your BizOS account."}
           </p>
           {mode === "signup" && <>
-            <Input label="Your Name" value={form.name} onChange={f("name")} placeholder="Amara Okonkwo" required />
-            <Input label="Business Name" value={form.business} onChange={f("business")} placeholder="Amara's Fashion Store" required />
-            <Input label="Phone Number" value={form.phone} onChange={f("phone")} placeholder="+234 800 000 0000" />
-            <Select label="Currency" value={form.currency} onChange={f("currency")} options={[{ value: "₦", label: "₦ Nigerian Naira (NGN)" }, { value: "GH₵", label: "GH₵ Ghanaian Cedi (GHS)" }, { value: "KSh", label: "KSh Kenyan Shilling (KES)" }, { value: "$", label: "$ US Dollar (USD)" }]} />
+            <Input label="Your Name" value={form.name} onChange={f("name")} placeholder="Amara Wanjiku" required />
+            <Input label="Business Name" value={form.business} onChange={f("business")} placeholder="Amara's Shop" required />
+            <Input label="Phone" value={form.phone} onChange={f("phone")} placeholder="+254 700 000 000" />
+            <Select label="Currency" value={form.currency} onChange={f("currency")} options={[
+              { value: "KSh", label: "KSh — Kenyan Shilling" },
+              { value: "₦", label: "₦ — Nigerian Naira" },
+              { value: "GH₵", label: "GH₵ — Ghanaian Cedi" },
+              { value: "$", label: "$ — US Dollar" },
+            ]} />
           </>}
-          <Input label="Email" value={form.email} onChange={f("email")} placeholder="amara@email.com" type="email" required />
+          <Input label="Email" value={form.email} onChange={f("email")} placeholder="you@email.com" type="email" required />
           <Input label="Password" value={form.pass} onChange={f("pass")} placeholder="••••••••" type="password" required />
           {err && <div style={{ color: C.red, fontSize: 13, marginBottom: 14, background: C.redLight, padding: "10px 14px", borderRadius: 8 }}>{err}</div>}
-          <Btn full onClick={submit} size="lg">{mode === "signup" ? "Create Account →" : "Login →"}</Btn>
+          <Btn full onClick={submit} size="lg" disabled={loading}>{loading ? "Please wait..." : mode === "signup" ? "Create Account →" : "Login →"}</Btn>
           <p style={{ textAlign: "center", fontSize: 13, color: C.muted, marginTop: 16 }}>
             {mode === "signup" ? "Already have an account? " : "No account? "}
             <span style={{ color: C.accent, cursor: "pointer", fontWeight: 600 }} onClick={() => { setMode(m => m === "signup" ? "login" : "signup"); setErr(""); }}>
@@ -345,66 +322,46 @@ function Auth({ onAuth }) {
 // DASHBOARD
 // ══════════════════════════════════════════════════════
 function Dashboard({ user, products, sales, customers, expenses, onNav }) {
-  const curr = user.currency;
+  const curr = user.currency || "KSh";
   const todaySales = sales.filter(s => s.date === today()).reduce((sum, s) => sum + s.total, 0);
-  const monthSales = sales.filter(s => s.date.startsWith(thisMonth())).reduce((sum, s) => sum + s.total, 0);
-  const totalCustomers = customers.length;
+  const monthSales = sales.filter(s => s.date?.startsWith(thisMonth())).reduce((sum, s) => sum + s.total, 0);
   const lowStock = products.filter(p => p.qty <= (p.lowStockAlert || 5)).length;
-  const todayExpenses = expenses.filter(e => e.date === today()).reduce((s, e) => s + Number(e.amount), 0);
-  const recentSales = [...sales].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 6);
-  const topProducts = products.map(p => ({ ...p, sold: sales.flatMap(s => s.items).filter(i => i.productId === p.id).reduce((s, i) => s + i.qty, 0) })).sort((a, b) => b.sold - a.sold).slice(0, 5);
+  const recentSales = [...sales].sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || "")).slice(0, 5);
 
   return (
     <div>
       <div style={{ marginBottom: 28 }}>
-        <h2 style={{ fontFamily: C.display, fontWeight: 900, fontSize: 26, margin: "0 0 4px" }}>Good day, {user.name.split(" ")[0]} 👋</h2>
+        <h2 style={{ fontFamily: C.display, fontWeight: 900, fontSize: 26, margin: "0 0 4px" }}>Good day, {user.name?.split(" ")[0]} 👋</h2>
         <p style={{ color: C.muted, fontSize: 14, margin: 0 }}>{user.business} · {fmtDate(today())}</p>
       </div>
-
-      {/* Stats */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 14, marginBottom: 24 }}>
         <Stat label="Today's Sales" value={fmt(todaySales, curr)} sub={`${sales.filter(s => s.date === today()).length} transactions`} icon="💰" color={C.accent} />
         <Stat label="This Month" value={fmt(monthSales, curr)} sub="Total revenue" icon="📈" color={C.gold} />
-        <Stat label="Customers" value={totalCustomers} sub="Total records" icon="👥" color={C.blue} />
+        <Stat label="Customers" value={customers.length} sub="Total records" icon="👥" color={C.blue} />
         <Stat label="Low Stock" value={lowStock} sub={lowStock > 0 ? "Need restocking" : "All good"} icon="📦" color={lowStock > 0 ? C.red : C.accentBright} />
       </div>
-
-      <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr", gap: 20, marginBottom: 20 }}>
-        {/* Recent sales */}
+      <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr", gap: 20 }}>
         <Card>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
             <div style={{ fontFamily: C.display, fontWeight: 700, fontSize: 16 }}>Recent Sales</div>
             <Btn size="sm" variant="secondary" onClick={() => onNav("sales")}>View All</Btn>
           </div>
           {recentSales.length === 0
-            ? <EmptyState icon="💰" title="No sales yet" desc="Record your first sale to see it here." action="Record Sale" onAction={() => onNav("sales")} />
+            ? <EmptyState icon="💰" title="No sales yet" desc="Record your first sale." action="Record Sale" onAction={() => onNav("sales")} />
             : recentSales.map(s => {
               const cust = customers.find(c => c.id === s.customerId);
               return (
-                <div key={s.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "11px 0", borderBottom: `1px solid ${C.faint}` }}>
+                <div key={s.id} style={{ display: "flex", justifyContent: "space-between", padding: "11px 0", borderBottom: `1px solid ${C.faint}` }}>
                   <div>
-                    <div style={{ fontWeight: 600, fontSize: 14 }}>{cust?.name || "Walk-in Customer"}</div>
-                    <div style={{ fontSize: 12, color: C.muted }}>{s.items.length} item{s.items.length !== 1 ? "s" : ""} · {fmtDate(s.date)}</div>
+                    <div style={{ fontWeight: 600, fontSize: 14 }}>{cust?.name || "Walk-in"}</div>
+                    <div style={{ fontSize: 12, color: C.muted }}>{s.items?.length || 0} items · {fmtDate(s.date)}</div>
                   </div>
-                  <div style={{ fontFamily: C.mono, fontWeight: 700, color: C.accent, fontSize: 14 }}>{fmt(s.total, curr)}</div>
+                  <div style={{ fontFamily: C.mono, fontWeight: 700, color: C.accent }}>{fmt(s.total, curr)}</div>
                 </div>
               );
             })}
         </Card>
-
-        {/* Top products + quick actions */}
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-          <Card>
-            <div style={{ fontFamily: C.display, fontWeight: 700, fontSize: 16, marginBottom: 14 }}>Top Products</div>
-            {topProducts.length === 0
-              ? <div style={{ color: C.muted, fontSize: 13 }}>Add products to see top sellers.</div>
-              : topProducts.map(p => (
-                <div key={p.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0", borderBottom: `1px solid ${C.faint}` }}>
-                  <div style={{ fontSize: 13, fontWeight: 500, flex: 1 }}>{p.name}</div>
-                  <div style={{ fontSize: 12, color: C.muted, fontFamily: C.mono }}>{p.sold} sold</div>
-                </div>
-              ))}
-          </Card>
           <Card>
             <div style={{ fontFamily: C.display, fontWeight: 700, fontSize: 16, marginBottom: 14 }}>Quick Actions</div>
             {[{ label: "📦 Add Product", nav: "inventory" }, { label: "💰 Record Sale", nav: "sales" }, { label: "👥 New Customer", nav: "customers" }, { label: "🧠 Ask AI", nav: "ai" }].map(a => (
@@ -415,16 +372,14 @@ function Dashboard({ user, products, sales, customers, expenses, onNav }) {
           </Card>
         </div>
       </div>
-
-      {/* Low stock warning */}
       {lowStock > 0 && (
-        <Card style={{ background: C.redLight, border: `1px solid #fca5a5` }}>
+        <Card style={{ background: C.redLight, border: "1px solid #fca5a5", marginTop: 20 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <div>
               <div style={{ fontWeight: 700, color: C.red, marginBottom: 4 }}>⚠ {lowStock} product{lowStock > 1 ? "s" : ""} running low</div>
               <div style={{ fontSize: 13, color: C.muted }}>{products.filter(p => p.qty <= (p.lowStockAlert || 5)).map(p => p.name).join(", ")}</div>
             </div>
-            <Btn size="sm" variant="danger" onClick={() => onNav("inventory")}>View Inventory</Btn>
+            <Btn size="sm" variant="danger" onClick={() => onNav("inventory")}>View</Btn>
           </div>
         </Card>
       )}
@@ -441,50 +396,37 @@ function Inventory({ products, setProducts, user, isPro }) {
   const [form, setForm] = useState({ name: "", category: "", buyPrice: "", sellPrice: "", qty: "", unit: "pcs", lowStockAlert: "5" });
   const f = k => v => setForm(p => ({ ...p, [k]: v }));
   const canAdd = isPro || products.length < 50;
+  const curr = user.currency || "KSh";
 
   function add() {
     if (!form.name || !form.sellPrice || !form.qty) return alert("Fill required fields.");
-    setProducts(prev => [...prev, { ...form, id: uid(), sellPrice: Number(form.sellPrice), buyPrice: Number(form.buyPrice), qty: Number(form.qty), lowStockAlert: Number(form.lowStockAlert), createdAt: today() }]);
+    const newProduct = { ...form, id: uid(), sellPrice: Number(form.sellPrice), buyPrice: Number(form.buyPrice || 0), qty: Number(form.qty), lowStockAlert: Number(form.lowStockAlert || 5), createdAt: today() };
+    setProducts(prev => [...prev, newProduct]);
     setForm({ name: "", category: "", buyPrice: "", sellPrice: "", qty: "", unit: "pcs", lowStockAlert: "5" });
     setShowAdd(false);
   }
 
-  function restock(id, amount) {
-    const qty = Number(prompt("How many units to add?"));
-    if (!qty || isNaN(qty)) return;
-    setProducts(prev => prev.map(p => p.id === id ? { ...p, qty: p.qty + qty } : p));
-  }
-
-  function remove(id) {
-    if (window.confirm("Remove this product?")) setProducts(prev => prev.filter(p => p.id !== id));
-  }
-
-  const filtered = products.filter(p => p.name.toLowerCase().includes(search.toLowerCase()));
-  const curr = user.currency;
+  const filtered = products.filter(p => p.name?.toLowerCase().includes(search.toLowerCase()));
 
   return (
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
         <div>
           <h2 style={{ fontFamily: C.display, fontWeight: 900, fontSize: 24, margin: "0 0 4px" }}>Inventory</h2>
-          <div style={{ color: C.muted, fontSize: 13 }}>{products.length} products · Total value: {fmt(products.reduce((s, p) => s + p.qty * p.sellPrice, 0), curr)}</div>
+          <div style={{ color: C.muted, fontSize: 13 }}>{products.length} products</div>
         </div>
         {canAdd ? <Btn onClick={() => setShowAdd(true)}>+ Add Product</Btn> : <Badge color={C.gold}>Upgrade for more</Badge>}
       </div>
-
-      {/* Search */}
-      <Input value={search} onChange={setSearch} placeholder="🔍  Search products..." style={{ marginBottom: 16 }} />
-
-      {/* Add modal */}
+      <Input value={search} onChange={setSearch} placeholder="🔍 Search products..." />
       {showAdd && (
         <Modal title="Add Product" onClose={() => setShowAdd(false)}>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-            <div style={{ gridColumn: "1 / -1" }}><Input label="Product Name" value={form.name} onChange={f("name")} placeholder="Indomie Noodles" required /></div>
-            <Input label="Category" value={form.category} onChange={f("category")} placeholder="Food, Fashion..." />
-            <Select label="Unit" value={form.unit} onChange={f("unit")} options={[{ value: "pcs", label: "Pieces" }, { value: "kg", label: "Kilograms" }, { value: "litres", label: "Litres" }, { value: "bags", label: "Bags" }, { value: "cartons", label: "Cartons" }, { value: "metres", label: "Metres" }]} />
+            <div style={{ gridColumn: "1 / -1" }}><Input label="Product Name *" value={form.name} onChange={f("name")} placeholder="Indomie Noodles" /></div>
+            <Input label="Category" value={form.category} onChange={f("category")} placeholder="Food..." />
+            <Select label="Unit" value={form.unit} onChange={f("unit")} options={[{ value: "pcs", label: "Pieces" }, { value: "kg", label: "Kilograms" }, { value: "litres", label: "Litres" }, { value: "bags", label: "Bags" }, { value: "cartons", label: "Cartons" }]} />
             <Input label={`Buy Price (${curr})`} value={form.buyPrice} onChange={f("buyPrice")} placeholder="500" type="number" />
-            <Input label={`Sell Price (${curr})`} value={form.sellPrice} onChange={f("sellPrice")} placeholder="700" type="number" required />
-            <Input label="Current Stock" value={form.qty} onChange={f("qty")} placeholder="100" type="number" required />
+            <Input label={`Sell Price (${curr}) *`} value={form.sellPrice} onChange={f("sellPrice")} placeholder="700" type="number" />
+            <Input label="Stock Qty *" value={form.qty} onChange={f("qty")} placeholder="100" type="number" />
             <Input label="Low Stock Alert" value={form.lowStockAlert} onChange={f("lowStockAlert")} placeholder="5" type="number" />
           </div>
           <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
@@ -493,17 +435,15 @@ function Inventory({ products, setProducts, user, isPro }) {
           </div>
         </Modal>
       )}
-
-      {/* Table */}
       {filtered.length === 0
-        ? <EmptyState icon="📦" title="No products yet" desc="Add your first product to start tracking inventory." action="+ Add Product" onAction={() => setShowAdd(true)} />
+        ? <EmptyState icon="📦" title="No products yet" desc="Add your first product." action="+ Add Product" onAction={() => setShowAdd(true)} />
         : (
           <Card style={{ padding: 0, overflow: "hidden" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14, fontFamily: C.font }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, fontFamily: C.font }}>
               <thead>
                 <tr style={{ background: C.faint, borderBottom: `1px solid ${C.border}` }}>
-                  {["Product", "Category", "Buy Price", "Sell Price", "Stock", "Value", "Status", ""].map(h => (
-                    <th key={h} style={{ padding: "12px 16px", textAlign: "left", fontSize: 11, fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: "0.07em", whiteSpace: "nowrap" }}>{h}</th>
+                  {["Product", "Category", "Sell Price", "Stock", "Status", ""].map(h => (
+                    <th key={h} style={{ padding: "12px 16px", textAlign: "left", fontSize: 11, fontWeight: 700, color: C.muted, textTransform: "uppercase" }}>{h}</th>
                   ))}
                 </tr>
               </thead>
@@ -512,19 +452,15 @@ function Inventory({ products, setProducts, user, isPro }) {
                   const isLow = p.qty <= (p.lowStockAlert || 5);
                   return (
                     <tr key={p.id} style={{ borderBottom: `1px solid ${C.faint}`, background: i % 2 === 0 ? C.surface : C.bg }}>
-                      <td style={{ padding: "13px 16px", fontWeight: 600 }}>{p.name}</td>
-                      <td style={{ padding: "13px 16px", color: C.muted }}>{p.category || "—"}</td>
-                      <td style={{ padding: "13px 16px", fontFamily: C.mono }}>{p.buyPrice ? fmt(p.buyPrice, curr) : "—"}</td>
-                      <td style={{ padding: "13px 16px", fontFamily: C.mono, color: C.accent, fontWeight: 700 }}>{fmt(p.sellPrice, curr)}</td>
-                      <td style={{ padding: "13px 16px", fontFamily: C.mono }}>{p.qty} {p.unit}</td>
-                      <td style={{ padding: "13px 16px", fontFamily: C.mono }}>{fmt(p.qty * p.sellPrice, curr)}</td>
-                      <td style={{ padding: "13px 16px" }}>
-                        <Badge color={isLow ? C.red : C.accentBright}>{isLow ? "LOW STOCK" : "IN STOCK"}</Badge>
-                      </td>
-                      <td style={{ padding: "13px 16px" }}>
+                      <td style={{ padding: "12px 16px", fontWeight: 600 }}>{p.name}</td>
+                      <td style={{ padding: "12px 16px", color: C.muted }}>{p.category || "—"}</td>
+                      <td style={{ padding: "12px 16px", fontFamily: C.mono, color: C.accent, fontWeight: 700 }}>{fmt(p.sellPrice, curr)}</td>
+                      <td style={{ padding: "12px 16px", fontFamily: C.mono }}>{p.qty} {p.unit}</td>
+                      <td style={{ padding: "12px 16px" }}><Badge color={isLow ? C.red : C.accentBright}>{isLow ? "LOW" : "OK"}</Badge></td>
+                      <td style={{ padding: "12px 16px" }}>
                         <div style={{ display: "flex", gap: 6 }}>
-                          <Btn size="sm" variant="secondary" onClick={() => restock(p.id)}>Restock</Btn>
-                          <Btn size="sm" variant="danger" onClick={() => remove(p.id)}>✕</Btn>
+                          <Btn size="sm" variant="secondary" onClick={() => { const q = Number(prompt("Units to add?")); if (q) setProducts(prev => prev.map(x => x.id === p.id ? { ...x, qty: x.qty + q } : x)); }}>+Stock</Btn>
+                          <Btn size="sm" variant="danger" onClick={() => { if (window.confirm("Remove?")) setProducts(prev => prev.filter(x => x.id !== p.id)); }}>✕</Btn>
                         </div>
                       </td>
                     </tr>
@@ -541,66 +477,51 @@ function Inventory({ products, setProducts, user, isPro }) {
 // ══════════════════════════════════════════════════════
 // SALES
 // ══════════════════════════════════════════════════════
-function Sales({ sales, setSales, products, setProducts, customers, user, isPro }) {
+function Sales({ sales, setSales, products, setProducts, customers, user }) {
   const [showAdd, setShowAdd] = useState(false);
   const [cart, setCart] = useState([]);
   const [selectedCustomer, setSelectedCustomer] = useState("");
   const [payMethod, setPayMethod] = useState("cash");
   const [filter, setFilter] = useState("today");
-  const curr = user.currency;
+  const curr = user.currency || "KSh";
 
-  function addToCart(productId) {
-    const p = products.find(x => x.id === productId);
-    if (!p || p.qty < 1) return alert("Product out of stock.");
+  function addToCart(p) {
+    if (p.qty < 1) return alert("Out of stock.");
     setCart(prev => {
-      const ex = prev.find(i => i.productId === productId);
-      if (ex) return prev.map(i => i.productId === productId ? { ...i, qty: i.qty + 1 } : i);
-      return [...prev, { productId, name: p.name, sellPrice: p.sellPrice, qty: 1 }];
+      const ex = prev.find(i => i.productId === p.id);
+      if (ex) return prev.map(i => i.productId === p.id ? { ...i, qty: i.qty + 1 } : i);
+      return [...prev, { productId: p.id, name: p.name, sellPrice: p.sellPrice, qty: 1 }];
     });
-  }
-
-  function updateQty(productId, qty) {
-    if (qty < 1) { setCart(prev => prev.filter(i => i.productId !== productId)); return; }
-    setCart(prev => prev.map(i => i.productId === productId ? { ...i, qty: Number(qty) } : i));
   }
 
   const cartTotal = cart.reduce((s, i) => s + i.sellPrice * i.qty, 0);
 
   function recordSale() {
     if (cart.length === 0) return alert("Add items to cart.");
-    // Deduct from inventory
     setProducts(prev => prev.map(p => {
       const item = cart.find(i => i.productId === p.id);
       return item ? { ...p, qty: Math.max(0, p.qty - item.qty) } : p;
     }));
-    const sale = { id: uid(), items: cart, total: cartTotal, customerId: selectedCustomer, payMethod, date: today(), createdAt: now() };
-    setSales(prev => [...prev, sale]);
-    setCart([]);
-    setSelectedCustomer("");
-    setPayMethod("cash");
-    setShowAdd(false);
+    setSales(prev => [...prev, { id: uid(), items: cart, total: cartTotal, customerId: selectedCustomer, payMethod, date: today(), createdAt: now() }]);
+    setCart([]); setSelectedCustomer(""); setPayMethod("cash"); setShowAdd(false);
   }
 
-  const filterDates = { today: today(), week: new Date(Date.now() - 7 * 86400000).toISOString().split("T")[0], month: thisMonth() };
   const filtered = sales.filter(s => {
-    if (filter === "today") return s.date === filterDates.today;
-    if (filter === "week") return s.date >= filterDates.week;
-    if (filter === "month") return s.date.startsWith(filterDates.month);
+    if (filter === "today") return s.date === today();
+    if (filter === "week") return s.date >= new Date(Date.now() - 7 * 86400000).toISOString().split("T")[0];
+    if (filter === "month") return s.date?.startsWith(thisMonth());
     return true;
   });
-  const filteredTotal = filtered.reduce((s, sale) => s + sale.total, 0);
 
   return (
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
         <div>
           <h2 style={{ fontFamily: C.display, fontWeight: 900, fontSize: 24, margin: "0 0 4px" }}>Sales</h2>
-          <div style={{ color: C.muted, fontSize: 13 }}>{filtered.length} transactions · {fmt(filteredTotal, curr)}</div>
+          <div style={{ color: C.muted, fontSize: 13 }}>{filtered.length} transactions · {fmt(filtered.reduce((s, x) => s + x.total, 0), curr)}</div>
         </div>
         <Btn onClick={() => setShowAdd(true)}>+ Record Sale</Btn>
       </div>
-
-      {/* Filters */}
       <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
         {["today", "week", "month", "all"].map(f => (
           <button key={f} onClick={() => setFilter(f)} style={{ border: `1px solid ${filter === f ? C.accent : C.border}`, background: filter === f ? C.accentLight : "transparent", color: filter === f ? C.accent : C.muted, borderRadius: 8, padding: "7px 16px", fontSize: 12, cursor: "pointer", fontFamily: C.mono, textTransform: "capitalize", fontWeight: filter === f ? 700 : 400 }}>
@@ -608,52 +529,46 @@ function Sales({ sales, setSales, products, setProducts, customers, user, isPro 
           </button>
         ))}
       </div>
-
-      {/* Sale modal */}
       {showAdd && (
         <Modal title="Record New Sale" onClose={() => setShowAdd(false)} width={640}>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-            {/* Products */}
             <div>
               <div style={{ fontSize: 12, fontWeight: 700, color: C.muted, marginBottom: 10, textTransform: "uppercase" }}>Select Products</div>
               <div style={{ maxHeight: 280, overflowY: "auto", border: `1px solid ${C.border}`, borderRadius: 10, padding: 8 }}>
-                {products.map(p => (
-                  <div key={p.id} onClick={() => addToCart(p.id)} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 12px", borderRadius: 8, cursor: "pointer", marginBottom: 4, background: C.faint }}
-                    onMouseEnter={e => e.currentTarget.style.background = C.accentLight}
-                    onMouseLeave={e => e.currentTarget.style.background = C.faint}>
-                    <div>
-                      <div style={{ fontWeight: 600, fontSize: 13 }}>{p.name}</div>
-                      <div style={{ fontSize: 11, color: C.muted }}>Stock: {p.qty} {p.unit}</div>
+                {products.length === 0 ? <div style={{ padding: 20, textAlign: "center", color: C.muted, fontSize: 13 }}>No products yet. Add products first.</div>
+                  : products.map(p => (
+                    <div key={p.id} onClick={() => addToCart(p)} style={{ display: "flex", justifyContent: "space-between", padding: "10px 12px", borderRadius: 8, cursor: "pointer", marginBottom: 4, background: C.faint }}
+                      onMouseEnter={e => e.currentTarget.style.background = C.accentLight}
+                      onMouseLeave={e => e.currentTarget.style.background = C.faint}>
+                      <div>
+                        <div style={{ fontWeight: 600, fontSize: 13 }}>{p.name}</div>
+                        <div style={{ fontSize: 11, color: C.muted }}>Stock: {p.qty}</div>
+                      </div>
+                      <div style={{ fontFamily: C.mono, fontSize: 13, color: C.accent, fontWeight: 700 }}>{fmt(p.sellPrice, curr)}</div>
                     </div>
-                    <div style={{ fontFamily: C.mono, fontSize: 13, color: C.accent, fontWeight: 700 }}>{fmt(p.sellPrice, curr)}</div>
-                  </div>
-                ))}
+                  ))}
               </div>
             </div>
-
-            {/* Cart */}
             <div>
               <div style={{ fontSize: 12, fontWeight: 700, color: C.muted, marginBottom: 10, textTransform: "uppercase" }}>Cart</div>
-              <div style={{ minHeight: 200, border: `1px solid ${C.border}`, borderRadius: 10, padding: 12, marginBottom: 12 }}>
-                {cart.length === 0
-                  ? <div style={{ color: C.muted, fontSize: 13, textAlign: "center", marginTop: 60 }}>Click products to add</div>
+              <div style={{ minHeight: 160, border: `1px solid ${C.border}`, borderRadius: 10, padding: 12, marginBottom: 12 }}>
+                {cart.length === 0 ? <div style={{ color: C.muted, fontSize: 13, textAlign: "center", marginTop: 40 }}>Click products to add</div>
                   : cart.map(item => (
                     <div key={item.productId} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
                       <div style={{ flex: 1 }}>
                         <div style={{ fontSize: 13, fontWeight: 600 }}>{item.name}</div>
-                        <div style={{ fontSize: 11, color: C.muted }}>{fmt(item.sellPrice, curr)} each</div>
                       </div>
                       <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                        <button onClick={() => updateQty(item.productId, item.qty - 1)} style={{ width: 24, height: 24, border: `1px solid ${C.border}`, borderRadius: 4, background: C.faint, cursor: "pointer", fontFamily: C.font, fontWeight: 700 }}>-</button>
-                        <span style={{ fontSize: 13, fontFamily: C.mono, minWidth: 24, textAlign: "center" }}>{item.qty}</span>
-                        <button onClick={() => updateQty(item.productId, item.qty + 1)} style={{ width: 24, height: 24, border: `1px solid ${C.border}`, borderRadius: 4, background: C.faint, cursor: "pointer", fontFamily: C.font, fontWeight: 700 }}>+</button>
+                        <button onClick={() => setCart(prev => item.qty <= 1 ? prev.filter(i => i.productId !== item.productId) : prev.map(i => i.productId === item.productId ? { ...i, qty: i.qty - 1 } : i))} style={{ width: 24, height: 24, border: `1px solid ${C.border}`, borderRadius: 4, background: C.faint, cursor: "pointer" }}>-</button>
+                        <span style={{ fontSize: 13, fontFamily: C.mono, minWidth: 20, textAlign: "center" }}>{item.qty}</span>
+                        <button onClick={() => setCart(prev => prev.map(i => i.productId === item.productId ? { ...i, qty: i.qty + 1 } : i))} style={{ width: 24, height: 24, border: `1px solid ${C.border}`, borderRadius: 4, background: C.faint, cursor: "pointer" }}>+</button>
                       </div>
-                      <div style={{ fontFamily: C.mono, fontSize: 13, fontWeight: 700, color: C.accent, marginLeft: 10, minWidth: 60, textAlign: "right" }}>{fmt(item.sellPrice * item.qty, curr)}</div>
+                      <div style={{ fontFamily: C.mono, fontSize: 13, fontWeight: 700, color: C.accent, marginLeft: 8 }}>{fmt(item.sellPrice * item.qty, curr)}</div>
                     </div>
                   ))}
               </div>
               <Select label="Customer (optional)" value={selectedCustomer} onChange={setSelectedCustomer} options={[{ value: "", label: "Walk-in customer" }, ...customers.map(c => ({ value: c.id, label: c.name }))]} />
-              <Select label="Payment Method" value={payMethod} onChange={setPayMethod} options={[{ value: "cash", label: "💵 Cash" }, { value: "transfer", label: "🏦 Bank Transfer" }, { value: "pos", label: "💳 POS" }, { value: "mobile_money", label: "📱 Mobile Money" }]} />
+              <Select label="Payment Method" value={payMethod} onChange={setPayMethod} options={[{ value: "cash", label: "💵 Cash" }, { value: "mpesa", label: "📱 M-Pesa" }, { value: "transfer", label: "🏦 Bank Transfer" }, { value: "pos", label: "💳 POS" }]} />
               <div style={{ background: C.accentLight, borderRadius: 10, padding: 14, marginBottom: 16, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <span style={{ fontWeight: 700, color: C.accent }}>Total</span>
                 <span style={{ fontFamily: C.mono, fontWeight: 900, fontSize: 20, color: C.accent }}>{fmt(cartTotal, curr)}</span>
@@ -663,10 +578,8 @@ function Sales({ sales, setSales, products, setProducts, customers, user, isPro 
           </div>
         </Modal>
       )}
-
-      {/* Sales list */}
       {filtered.length === 0
-        ? <EmptyState icon="💰" title="No sales recorded" desc="Record your sales to track revenue and see insights." action="+ Record Sale" onAction={() => setShowAdd(true)} />
+        ? <EmptyState icon="💰" title="No sales" desc="Record your first sale." action="+ Record Sale" onAction={() => setShowAdd(true)} />
         : (
           <div style={{ display: "grid", gap: 10 }}>
             {[...filtered].reverse().map(sale => {
@@ -675,7 +588,7 @@ function Sales({ sales, setSales, products, setProducts, customers, user, isPro 
                 <Card key={sale.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
                   <div>
                     <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4 }}>{cust?.name || "Walk-in Customer"}</div>
-                    <div style={{ fontSize: 12, color: C.muted }}>{sale.items.map(i => `${i.name} ×${i.qty}`).join(", ")}</div>
+                    <div style={{ fontSize: 12, color: C.muted }}>{sale.items?.map(i => `${i.name} ×${i.qty}`).join(", ")}</div>
                     <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>{fmtDate(sale.date)} · {sale.payMethod}</div>
                   </div>
                   <div style={{ fontFamily: C.mono, fontWeight: 900, fontSize: 18, color: C.accent }}>{fmt(sale.total, curr)}</div>
@@ -693,15 +606,15 @@ function Sales({ sales, setSales, products, setProducts, customers, user, isPro 
 // ══════════════════════════════════════════════════════
 function Customers({ customers, setCustomers, sales, user, isPro }) {
   const [showAdd, setShowAdd] = useState(false);
-  const [form, setForm] = useState({ name: "", phone: "", email: "", address: "", notes: "" });
+  const [form, setForm] = useState({ name: "", phone: "", email: "", notes: "" });
   const f = k => v => setForm(p => ({ ...p, [k]: v }));
   const canAdd = isPro || customers.length < 3;
-  const curr = user.currency;
+  const curr = user.currency || "KSh";
 
   function add() {
     if (!form.name) return alert("Enter customer name.");
     setCustomers(prev => [...prev, { ...form, id: uid(), createdAt: today() }]);
-    setForm({ name: "", phone: "", email: "", address: "", notes: "" });
+    setForm({ name: "", phone: "", email: "", notes: "" });
     setShowAdd(false);
   }
 
@@ -710,52 +623,47 @@ function Customers({ customers, setCustomers, sales, user, isPro }) {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
         <div>
           <h2 style={{ fontFamily: C.display, fontWeight: 900, fontSize: 24, margin: "0 0 4px" }}>Customers</h2>
-          <div style={{ color: C.muted, fontSize: 13 }}>{customers.length} total{!isPro ? ` · Free plan: ${3 - customers.length} slots left` : ""}</div>
+          <div style={{ color: C.muted, fontSize: 13 }}>{customers.length} total{!isPro ? ` · Free: ${3 - customers.length} slots left` : ""}</div>
         </div>
         {canAdd ? <Btn onClick={() => setShowAdd(true)}>+ Add Customer</Btn> : <Badge color={C.gold}>Upgrade to add more</Badge>}
       </div>
-
       {showAdd && (
         <Modal title="New Customer" onClose={() => setShowAdd(false)}>
-          <Input label="Full Name" value={form.name} onChange={f("name")} placeholder="Chioma Obi" required />
-          <Input label="Phone Number" value={form.phone} onChange={f("phone")} placeholder="+234 800 000 0000" />
-          <Input label="Email" value={form.email} onChange={f("email")} placeholder="chioma@email.com" />
-          <Input label="Address" value={form.address} onChange={f("address")} placeholder="10 Marina Street, Lagos" />
+          <Input label="Full Name *" value={form.name} onChange={f("name")} placeholder="Jane Wanjiku" />
+          <Input label="Phone" value={form.phone} onChange={f("phone")} placeholder="+254 700 000 000" />
+          <Input label="Email" value={form.email} onChange={f("email")} placeholder="jane@email.com" />
           <div style={{ marginBottom: 14 }}>
             <div style={{ fontSize: 12, fontWeight: 600, color: C.muted, marginBottom: 6 }}>Notes</div>
-            <textarea value={form.notes} onChange={e => f("notes")(e.target.value)} placeholder="Prefers bulk orders, pays on time..." rows={3}
+            <textarea value={form.notes} onChange={e => f("notes")(e.target.value)} placeholder="Prefers bulk orders..." rows={3}
               style={{ width: "100%", boxSizing: "border-box", border: `1.5px solid ${C.border}`, borderRadius: 10, padding: "10px 14px", fontFamily: C.font, fontSize: 14, color: C.text, background: C.bg, outline: "none", resize: "vertical" }} />
           </div>
           <div style={{ display: "flex", gap: 10 }}>
-            <Btn onClick={add}>Save Customer</Btn>
+            <Btn onClick={add}>Save</Btn>
             <Btn variant="ghost" onClick={() => setShowAdd(false)}>Cancel</Btn>
           </div>
         </Modal>
       )}
-
       {customers.length === 0
-        ? <EmptyState icon="👥" title="No customers yet" desc="Build your customer database to track loyalty and follow up on debts." action="+ Add Customer" onAction={() => setShowAdd(true)} />
+        ? <EmptyState icon="👥" title="No customers yet" desc="Build your customer database." action="+ Add Customer" onAction={() => setShowAdd(true)} />
         : (
           <div style={{ display: "grid", gap: 12 }}>
             {customers.map(c => {
-              const custSales = sales.filter(s => s.customerId === c.id);
-              const totalSpent = custSales.reduce((s, sale) => s + sale.total, 0);
+              const spent = sales.filter(s => s.customerId === c.id).reduce((s, x) => s + x.total, 0);
+              const purchases = sales.filter(s => s.customerId === c.id).length;
               return (
                 <Card key={c.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 16 }}>
                   <div style={{ display: "flex", gap: 16, alignItems: "center", flex: 1 }}>
                     <div style={{ width: 44, height: 44, borderRadius: "50%", background: C.accentLight, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: C.display, fontWeight: 900, fontSize: 18, color: C.accent, flexShrink: 0 }}>
-                      {c.name[0].toUpperCase()}
+                      {c.name?.[0]?.toUpperCase()}
                     </div>
                     <div>
                       <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 3 }}>{c.name}</div>
                       <div style={{ fontSize: 12, color: C.muted }}>{c.phone} {c.email && `· ${c.email}`}</div>
-                      {c.notes && <div style={{ fontSize: 12, color: C.muted, fontStyle: "italic", marginTop: 4 }}>{c.notes}</div>}
                     </div>
                   </div>
                   <div style={{ textAlign: "right" }}>
-                    <div style={{ fontFamily: C.mono, fontWeight: 700, color: C.accent, fontSize: 16 }}>{fmt(totalSpent, curr)}</div>
-                    <div style={{ fontSize: 12, color: C.muted }}>{custSales.length} purchase{custSales.length !== 1 ? "s" : ""}</div>
-                    <div style={{ fontSize: 11, color: C.muted }}>Since {fmtDate(c.createdAt)}</div>
+                    <div style={{ fontFamily: C.mono, fontWeight: 700, color: C.accent }}>{fmt(spent, curr)}</div>
+                    <div style={{ fontSize: 12, color: C.muted }}>{purchases} purchases</div>
                   </div>
                 </Card>
               );
@@ -773,7 +681,8 @@ function Expenses({ expenses, setExpenses, user }) {
   const [showAdd, setShowAdd] = useState(false);
   const [form, setForm] = useState({ description: "", amount: "", category: "operations", date: today() });
   const f = k => v => setForm(p => ({ ...p, [k]: v }));
-  const curr = user.currency;
+  const curr = user.currency || "KSh";
+  const total = expenses.filter(e => e.date?.startsWith(thisMonth())).reduce((s, e) => s + Number(e.amount), 0);
 
   function add() {
     if (!form.description || !form.amount) return alert("Fill required fields.");
@@ -781,10 +690,6 @@ function Expenses({ expenses, setExpenses, user }) {
     setForm({ description: "", amount: "", category: "operations", date: today() });
     setShowAdd(false);
   }
-
-  const thisMonthExpenses = expenses.filter(e => e.date.startsWith(thisMonth()));
-  const total = thisMonthExpenses.reduce((s, e) => s + Number(e.amount), 0);
-  const byCategory = thisMonthExpenses.reduce((acc, e) => { acc[e.category] = (acc[e.category] || 0) + Number(e.amount); return acc; }, {});
 
   return (
     <div>
@@ -795,44 +700,30 @@ function Expenses({ expenses, setExpenses, user }) {
         </div>
         <Btn onClick={() => setShowAdd(true)}>+ Add Expense</Btn>
       </div>
-
-      {/* Category breakdown */}
-      {Object.keys(byCategory).length > 0 && (
-        <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 20 }}>
-          {Object.entries(byCategory).map(([cat, amount]) => (
-            <Card key={cat} style={{ flex: 1, minWidth: 140, background: C.redLight, border: `1px solid #fca5a5` }}>
-              <div style={{ fontSize: 11, color: C.red, textTransform: "capitalize", fontWeight: 700, marginBottom: 6 }}>{cat}</div>
-              <div style={{ fontFamily: C.mono, fontWeight: 700, color: C.red }}>{fmt(amount, curr)}</div>
-            </Card>
-          ))}
-        </div>
-      )}
-
       {showAdd && (
         <Modal title="Add Expense" onClose={() => setShowAdd(false)}>
-          <Input label="Description" value={form.description} onChange={f("description")} placeholder="Generator fuel, Staff salary..." required />
-          <Input label={`Amount (${curr})`} value={form.amount} onChange={f("amount")} placeholder="5000" type="number" required />
+          <Input label="Description *" value={form.description} onChange={f("description")} placeholder="Generator fuel..." />
+          <Input label={`Amount (${curr}) *`} value={form.amount} onChange={f("amount")} placeholder="5000" type="number" />
           <Select label="Category" value={form.category} onChange={f("category")} options={[{ value: "operations", label: "Operations" }, { value: "staff", label: "Staff / Salary" }, { value: "rent", label: "Rent / Utilities" }, { value: "transport", label: "Transport" }, { value: "marketing", label: "Marketing" }, { value: "other", label: "Other" }]} />
           <Input label="Date" value={form.date} onChange={f("date")} type="date" />
           <div style={{ display: "flex", gap: 10 }}>
-            <Btn onClick={add}>Save Expense</Btn>
+            <Btn onClick={add}>Save</Btn>
             <Btn variant="ghost" onClick={() => setShowAdd(false)}>Cancel</Btn>
           </div>
         </Modal>
       )}
-
       {expenses.length === 0
-        ? <EmptyState icon="💸" title="No expenses recorded" desc="Track what you spend to understand your real profit." action="+ Add Expense" onAction={() => setShowAdd(true)} />
+        ? <EmptyState icon="💸" title="No expenses" desc="Track your spending to know your real profit." action="+ Add Expense" onAction={() => setShowAdd(true)} />
         : (
           <div style={{ display: "grid", gap: 10 }}>
             {[...expenses].reverse().map(e => (
               <Card key={e.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div>
                   <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 3 }}>{e.description}</div>
-                  <div style={{ fontSize: 12, color: C.muted }}>{fmtDate(e.date)} · <span style={{ textTransform: "capitalize" }}>{e.category}</span></div>
+                  <div style={{ fontSize: 12, color: C.muted }}>{fmtDate(e.date)} · {e.category}</div>
                 </div>
                 <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-                  <div style={{ fontFamily: C.mono, fontWeight: 700, color: C.red, fontSize: 15 }}>-{fmt(e.amount, curr)}</div>
+                  <div style={{ fontFamily: C.mono, fontWeight: 700, color: C.red }}>-{fmt(e.amount, curr)}</div>
                   <Btn size="sm" variant="danger" onClick={() => setExpenses(prev => prev.filter(x => x.id !== e.id))}>✕</Btn>
                 </div>
               </Card>
@@ -847,50 +738,41 @@ function Expenses({ expenses, setExpenses, user }) {
 // AI BRAIN
 // ══════════════════════════════════════════════════════
 function AIBrain({ user, products, sales, customers, expenses }) {
-  const [msgs, setMsgs] = useState([{ role: "ai", text: `Hello ${user.name.split(" ")[0]}! I'm your BizOS AI assistant. I know everything about ${user.business} — your products, sales, customers, and expenses. Ask me anything.` }]);
+  const [msgs, setMsgs] = useState([{ role: "ai", text: `Hello ${user.name?.split(" ")[0]}! I'm your BizOS AI advisor. I know everything about ${user.business}. Ask me anything about your business.` }]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const bottomRef = useRef();
-  const curr = user.currency;
+  const curr = user.currency || "KSh";
 
-  const PROMPTS = ["What's my best selling product?", "How much profit did I make this month?", "Which customer buys the most?", "What products are running low?", "What day do I sell the most?", "What are my biggest expenses?"];
+  const PROMPTS = ["What's my best selling product?", "How much profit this month?", "Which customer buys the most?", "What products are running low?", "What day do I sell the most?"];
 
   function buildSystem() {
-    const monthRevenue = sales.filter(s => s.date.startsWith(thisMonth())).reduce((s, x) => s + x.total, 0);
-    const monthExpenses = expenses.filter(e => e.date.startsWith(thisMonth())).reduce((s, e) => s + Number(e.amount), 0);
-    const topProducts = products.map(p => ({ name: p.name, sold: sales.flatMap(s => s.items).filter(i => i.productId === p.id).reduce((s, i) => s + i.qty, 0) })).sort((a, b) => b.sold - a.sold).slice(0, 5);
+    const monthRevenue = sales.filter(s => s.date?.startsWith(thisMonth())).reduce((s, x) => s + x.total, 0);
+    const monthExpenses = expenses.filter(e => e.date?.startsWith(thisMonth())).reduce((s, e) => s + Number(e.amount), 0);
+    const topProducts = products.map(p => ({ name: p.name, sold: sales.flatMap(s => s.items || []).filter(i => i.productId === p.id).reduce((s, i) => s + i.qty, 0) })).sort((a, b) => b.sold - a.sold).slice(0, 5);
     const topCustomers = customers.map(c => ({ name: c.name, spent: sales.filter(s => s.customerId === c.id).reduce((s, x) => s + x.total, 0) })).sort((a, b) => b.spent - a.spent).slice(0, 5);
-    const lowStock = products.filter(p => p.qty <= (p.lowStockAlert || 5)).map(p => p.name);
+    return `You are the AI business advisor for ${user.business}, owned by ${user.name} in Kenya. You have full access to their data. Be direct, helpful, and insightful. Speak like a smart advisor who cares about their success.
 
-    return `You are the AI business advisor for ${user.business}, owned by ${user.name}. You have full access to their business data. Be direct, insightful, and practical. Speak like a smart business advisor who cares about their success.
-
-BUSINESS SNAPSHOT:
+BUSINESS DATA:
 - Currency: ${curr}
-- Total products: ${products.length}
-- Total customers: ${customers.length}
-- This month revenue: ${curr}${monthRevenue.toLocaleString()}
-- This month expenses: ${curr}${monthExpenses.toLocaleString()}  
-- Estimated profit: ${curr}${(monthRevenue - monthExpenses).toLocaleString()}
-- Low stock items: ${lowStock.join(", ") || "None"}
+- Products: ${products.length}
+- Customers: ${customers.length}
+- This month revenue: ${curr} ${monthRevenue.toLocaleString()}
+- This month expenses: ${curr} ${monthExpenses.toLocaleString()}
+- Estimated profit: ${curr} ${(monthRevenue - monthExpenses).toLocaleString()}
+- Low stock: ${products.filter(p => p.qty <= (p.lowStockAlert || 5)).map(p => p.name).join(", ") || "None"}
 
-TOP SELLING PRODUCTS:
-${topProducts.map((p, i) => `${i + 1}. ${p.name} (${p.sold} units sold)`).join("\n") || "No sales yet"}
+TOP PRODUCTS: ${topProducts.map((p, i) => `${i + 1}. ${p.name} (${p.sold} sold)`).join(", ") || "No sales yet"}
+TOP CUSTOMERS: ${topCustomers.map((c, i) => `${i + 1}. ${c.name} (${curr} ${c.spent.toLocaleString()})`).join(", ") || "None yet"}
 
-TOP CUSTOMERS:
-${topCustomers.map((c, i) => `${i + 1}. ${c.name} (${curr}${c.spent.toLocaleString()} total)`).join("\n") || "No customers yet"}
-
-RECENT SALES (last 10):
-${sales.slice(-10).map(s => `- ${curr}${s.total.toLocaleString()} on ${s.date} via ${s.payMethod}`).join("\n") || "None"}
-
-Answer helpfully and specifically. If you spot something concerning (low stock, low profit), mention it proactively. Keep responses concise and actionable.`;
+Answer specifically and concisely. Be actionable.`;
   }
 
   async function send(msg) {
     const text = msg || input.trim();
     if (!text) return;
     setMsgs(m => [...m, { role: "user", text }]);
-    setInput("");
-    setLoading(true);
+    setInput(""); setLoading(true);
     const reply = await askAI(buildSystem(), text);
     setMsgs(m => [...m, { role: "ai", text: reply }]);
     setLoading(false);
@@ -900,36 +782,33 @@ Answer helpfully and specifically. If you spot something concerning (low stock, 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "calc(100vh - 120px)" }}>
       <div style={{ marginBottom: 16 }}>
-        <h2 style={{ fontFamily: C.display, fontWeight: 900, fontSize: 24, margin: "0 0 4px" }}>AI Business Advisor 🧠</h2>
+        <h2 style={{ fontFamily: C.display, fontWeight: 900, fontSize: 24, margin: "0 0 4px" }}>AI Advisor 🧠</h2>
         <p style={{ color: C.muted, fontSize: 13, margin: 0 }}>Knows your entire business. Ask anything.</p>
       </div>
-
       <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: 14, paddingBottom: 16 }}>
         {msgs.map((m, i) => (
           <div key={i} style={{ display: "flex", justifyContent: m.role === "user" ? "flex-end" : "flex-start" }}>
             {m.role === "ai" && <div style={{ width: 32, height: 32, borderRadius: "50%", background: C.accentLight, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, marginRight: 10, flexShrink: 0 }}>🧠</div>}
-            <div style={{ maxWidth: "72%", padding: "13px 18px", borderRadius: m.role === "user" ? "16px 16px 4px 16px" : "16px 16px 16px 4px", background: m.role === "user" ? C.accent : C.surface, color: m.role === "user" ? "#fff" : C.text, border: m.role === "ai" ? `1px solid ${C.border}` : "none", fontSize: 14, lineHeight: 1.7, fontFamily: C.font, whiteSpace: "pre-wrap" }}>
+            <div style={{ maxWidth: "72%", padding: "13px 18px", borderRadius: m.role === "user" ? "16px 16px 4px 16px" : "16px 16px 16px 4px", background: m.role === "user" ? C.accent : C.surface, color: m.role === "user" ? "#fff" : C.text, border: m.role === "ai" ? `1px solid ${C.border}` : "none", fontSize: 14, lineHeight: 1.7, whiteSpace: "pre-wrap" }}>
               {m.text}
             </div>
           </div>
         ))}
         {loading && (
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <div style={{ width: 32, height: 32, borderRadius: "50%", background: C.accentLight, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16 }}>🧠</div>
-            <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: "16px 16px 16px 4px", padding: "13px 18px", color: C.muted, fontFamily: C.mono, fontSize: 13 }}>Thinking...</div>
+            <div style={{ width: 32, height: 32, borderRadius: "50%", background: C.accentLight, display: "flex", alignItems: "center", justifyContent: "center" }}>🧠</div>
+            <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: "16px 16px 16px 4px", padding: "13px 18px", color: C.muted, fontSize: 13 }}>Thinking...</div>
           </div>
         )}
         <div ref={bottomRef} />
       </div>
-
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
         {PROMPTS.map(p => (
-          <button key={p} onClick={() => send(p)} style={{ background: C.faint, border: `1px solid ${C.border}`, borderRadius: 100, padding: "6px 14px", fontSize: 12, color: C.muted, cursor: "pointer", fontFamily: C.font, fontWeight: 500 }}>
+          <button key={p} onClick={() => send(p)} style={{ background: C.faint, border: `1px solid ${C.border}`, borderRadius: 100, padding: "6px 14px", fontSize: 12, color: C.muted, cursor: "pointer", fontFamily: C.font }}>
             {p}
           </button>
         ))}
       </div>
-
       <div style={{ display: "flex", gap: 10 }}>
         <input value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => e.key === "Enter" && send()}
           placeholder="Ask about your business..."
@@ -946,26 +825,26 @@ Answer helpfully and specifically. If you spot something concerning (low stock, 
 // UPGRADE MODAL
 // ══════════════════════════════════════════════════════
 function UpgradeModal({ user, onUpgrade, onClose }) {
-  const [email, setEmail] = useState(user.email);
+  const [email, setEmail] = useState(user.email || "");
   return (
-    <Modal title="" onClose={onClose} width={480}>
-      <div style={{ textAlign: "center", marginBottom: 28 }}>
+    <Modal title="" onClose={onClose} width={460}>
+      <div style={{ textAlign: "center", marginBottom: 24 }}>
         <div style={{ fontSize: 48, marginBottom: 12 }}>⚡</div>
         <div style={{ fontFamily: C.display, fontSize: 26, fontWeight: 900, marginBottom: 8 }}>Upgrade to Business</div>
-        <p style={{ color: C.muted, fontSize: 14, lineHeight: 1.6 }}>Unlock everything and run your business without limits.</p>
+        <p style={{ color: C.muted, fontSize: 14, lineHeight: 1.6 }}>Unlock unlimited everything and run your business without limits.</p>
       </div>
       <div style={{ background: C.accentLight, borderRadius: 12, padding: 20, marginBottom: 24 }}>
-        {["✓ Unlimited products & inventory", "✓ Unlimited customers", "✓ Full sales history", "✓ AI business insights", "✓ Staff & expense tracking", "✓ Priority support"].map(f => (
+        {["✓ Unlimited products & inventory", "✓ Unlimited customers", "✓ Full sales history", "✓ AI business insights", "✓ Staff & expense tracking"].map(f => (
           <div key={f} style={{ fontSize: 14, fontWeight: 600, color: C.accent, padding: "5px 0" }}>{f}</div>
         ))}
       </div>
       <div style={{ textAlign: "center", marginBottom: 20 }}>
-        <span style={{ fontFamily: C.display, fontWeight: 900, fontSize: 40, color: C.text }}>₦9,000</span>
+        <span style={{ fontFamily: C.display, fontWeight: 900, fontSize: 36, color: C.text }}>KSh 1,500</span>
         <span style={{ color: C.muted }}>/month</span>
       </div>
       <Input label="Email" value={email} onChange={setEmail} type="email" />
-      <Btn full size="lg" onClick={() => paystack(email, 9000, ref => { onUpgrade(); alert("🎉 Welcome to Business! Ref: " + ref); })}>
-        Pay ₦9,000/month with Paystack →
+      <Btn full size="lg" onClick={() => openPaystack(email, 1500, async (ref) => { await onUpgrade(); alert("🎉 Welcome to Business! Ref: " + ref); })}>
+        Pay KSh 1,500/month →
       </Btn>
       <p style={{ textAlign: "center", fontSize: 12, color: C.muted, marginTop: 12 }}>Cancel anytime. Instant activation.</p>
     </Modal>
@@ -973,30 +852,83 @@ function UpgradeModal({ user, onUpgrade, onClose }) {
 }
 
 // ══════════════════════════════════════════════════════
-// MAIN APP SHELL
+// APP SHELL
 // ══════════════════════════════════════════════════════
 function AppShell({ user: initialUser, onLogout }) {
   const [user, setUser] = useState(initialUser);
   const [nav, setNav] = useState("dashboard");
   const [showUpgrade, setShowUpgrade] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [products, setProductsState] = useState([]);
+  const [sales, setSalesState] = useState([]);
+  const [customers, setCustomersState] = useState([]);
+  const [expenses, setExpensesState] = useState([]);
 
-  const key = id => `biz_${id}`;
-  const [products, setProducts] = useState(() => db.get(key(initialUser.id) + "_products", []));
-  const [sales, setSales] = useState(() => db.get(key(initialUser.id) + "_sales", []));
-  const [customers, setCustomers] = useState(() => db.get(key(initialUser.id) + "_customers", []));
-  const [expenses, setExpenses] = useState(() => db.get(key(initialUser.id) + "_expenses", []));
+  const userId = user.id;
 
-  useEffect(() => db.set(key(user.id) + "_products", products), [products]);
-  useEffect(() => db.set(key(user.id) + "_sales", sales), [sales]);
-  useEffect(() => db.set(key(user.id) + "_customers", customers), [customers]);
-  useEffect(() => db.set(key(user.id) + "_expenses", expenses), [expenses]);
+  // Load all data from Firebase on mount
+  useEffect(() => {
+    async function loadData() {
+      setLoading(true);
+      const [p, s, c, e, profile] = await Promise.all([
+        getUserData(userId, "products", []),
+        getUserData(userId, "sales", []),
+        getUserData(userId, "customers", []),
+        getUserData(userId, "expenses", []),
+        getUserProfile(userId),
+      ]);
+      setProductsState(p);
+      setSalesState(s);
+      setCustomersState(c);
+      setExpensesState(e);
+      if (profile.isPro !== undefined) setUser(u => ({ ...u, isPro: profile.isPro }));
+      setLoading(false);
+    }
+    loadData();
+  }, [userId]);
 
-  function upgrade() {
-    const users = db.get("biz_users", {});
-    if (users[user.email]) { users[user.email].isPro = true; db.set("biz_users", users); }
+  // Save to Firebase whenever data changes
+  const setProducts = (updater) => {
+    setProductsState(prev => {
+      const next = typeof updater === "function" ? updater(prev) : updater;
+      saveUserData(userId, "products", next);
+      return next;
+    });
+  };
+  const setSales = (updater) => {
+    setSalesState(prev => {
+      const next = typeof updater === "function" ? updater(prev) : updater;
+      saveUserData(userId, "sales", next);
+      return next;
+    });
+  };
+  const setCustomers = (updater) => {
+    setCustomersState(prev => {
+      const next = typeof updater === "function" ? updater(prev) : updater;
+      saveUserData(userId, "customers", next);
+      return next;
+    });
+  };
+  const setExpenses = (updater) => {
+    setExpensesState(prev => {
+      const next = typeof updater === "function" ? updater(prev) : updater;
+      saveUserData(userId, "expenses", next);
+      return next;
+    });
+  };
+
+  async function upgrade() {
+    await setUserPro(userId, true);
     setUser(u => ({ ...u, isPro: true }));
     setShowUpgrade(false);
   }
+
+  async function logout() {
+    await signOut(auth);
+    onLogout();
+  }
+
+  if (loading) return <Loader text="Loading your business data..." />;
 
   const NAV = [
     { id: "dashboard", label: "Dashboard", icon: "◈" },
@@ -1011,8 +943,6 @@ function AppShell({ user: initialUser, onLogout }) {
     <div style={{ minHeight: "100vh", background: C.bg, display: "flex", fontFamily: C.font }}>
       <Fonts />
       {showUpgrade && <UpgradeModal user={user} onUpgrade={upgrade} onClose={() => setShowUpgrade(false)} />}
-
-      {/* Sidebar */}
       <div style={{ width: 230, background: C.surface, borderRight: `1px solid ${C.border}`, display: "flex", flexDirection: "column", position: "fixed", height: "100vh", zIndex: 50 }}>
         <div style={{ padding: "24px 20px 20px", borderBottom: `1px solid ${C.border}` }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
@@ -1023,7 +953,6 @@ function AppShell({ user: initialUser, onLogout }) {
           <div style={{ fontSize: 12, color: C.muted }}>{user.name}</div>
           {user.isPro && <Badge color={C.accent} style={{ marginTop: 8, display: "inline-flex" }}>✦ BUSINESS</Badge>}
         </div>
-
         <nav style={{ flex: 1, padding: "12px 10px", overflowY: "auto" }}>
           {NAV.map(n => (
             <button key={n.id} onClick={() => setNav(n.id)} style={{ width: "100%", display: "flex", alignItems: "center", gap: 12, padding: "11px 12px", border: "none", borderRadius: 10, cursor: "pointer", fontFamily: C.font, fontWeight: 600, fontSize: 14, marginBottom: 2, transition: "all 0.15s", background: nav === n.id ? C.accentLight : "transparent", color: nav === n.id ? C.accent : C.muted }}>
@@ -1031,24 +960,21 @@ function AppShell({ user: initialUser, onLogout }) {
             </button>
           ))}
         </nav>
-
         <div style={{ padding: "12px 10px", borderTop: `1px solid ${C.border}` }}>
           {!user.isPro && (
-            <button onClick={() => setShowUpgrade(true)} style={{ width: "100%", background: C.gold, border: "none", borderRadius: 10, padding: "11px 12px", color: "#fff", fontFamily: C.font, fontWeight: 700, fontSize: 13, cursor: "pointer", marginBottom: 8, display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
-              ⚡ Upgrade to Business
+            <button onClick={() => setShowUpgrade(true)} style={{ width: "100%", background: C.gold, border: "none", borderRadius: 10, padding: "11px 12px", color: "#fff", fontFamily: C.font, fontWeight: 700, fontSize: 13, cursor: "pointer", marginBottom: 8 }}>
+              ⚡ Upgrade — KSh 1,500/mo
             </button>
           )}
-          <button onClick={onLogout} style={{ width: "100%", background: "transparent", border: `1px solid ${C.border}`, borderRadius: 10, padding: "9px 12px", color: C.muted, fontFamily: C.font, fontSize: 13, cursor: "pointer" }}>
+          <button onClick={logout} style={{ width: "100%", background: "transparent", border: `1px solid ${C.border}`, borderRadius: 10, padding: "9px 12px", color: C.muted, fontFamily: C.font, fontSize: 13, cursor: "pointer" }}>
             Logout
           </button>
         </div>
       </div>
-
-      {/* Main content */}
-      <main style={{ flex: 1, marginLeft: 230, padding: "36px 32px", maxWidth: "calc(100% - 230px)", boxSizing: "border-box", overflowY: "auto" }}>
+      <main style={{ flex: 1, marginLeft: 230, padding: "36px 32px", maxWidth: "calc(100% - 230px)", boxSizing: "border-box" }}>
         {nav === "dashboard" && <Dashboard user={user} products={products} sales={sales} customers={customers} expenses={expenses} onNav={setNav} />}
         {nav === "inventory" && <Inventory products={products} setProducts={setProducts} user={user} isPro={user.isPro} />}
-        {nav === "sales" && <Sales sales={sales} setSales={setSales} products={products} setProducts={setProducts} customers={customers} user={user} isPro={user.isPro} />}
+        {nav === "sales" && <Sales sales={sales} setSales={setSales} products={products} setProducts={setProducts} customers={customers} user={user} />}
         {nav === "customers" && <Customers customers={customers} setCustomers={setCustomers} sales={sales} user={user} isPro={user.isPro} />}
         {nav === "expenses" && <Expenses expenses={expenses} setExpenses={setExpenses} user={user} />}
         {nav === "ai" && <AIBrain user={user} products={products} sales={sales} customers={customers} expenses={expenses} />}
@@ -1061,10 +987,26 @@ function AppShell({ user: initialUser, onLogout }) {
 // ROOT
 // ══════════════════════════════════════════════════════
 export default function BizOS() {
-  const [screen, setScreen] = useState("landing");
+  const [screen, setScreen] = useState("loading");
   const [user, setUser] = useState(null);
+
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, async (firebaseUser) => {
+      if (firebaseUser) {
+        const profile = await getUserProfile(firebaseUser.uid);
+        setUser({ ...profile, id: firebaseUser.uid });
+        setScreen("app");
+      } else {
+        setScreen("landing");
+      }
+    });
+    return unsub;
+  }, []);
+
   function login(u) { setUser(u); setScreen("app"); }
   function logout() { setUser(null); setScreen("landing"); }
+
+  if (screen === "loading") return <Loader text="Starting BizOS..." />;
   if (screen === "landing") return <Landing onStart={() => setScreen("auth")} />;
   if (screen === "auth") return <Auth onAuth={login} />;
   if (screen === "app" && user) return <AppShell user={user} onLogout={logout} />;
