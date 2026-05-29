@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { initializeApp } from "firebase/app";
 import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "firebase/auth";
-import { getFirestore, doc, setDoc, getDoc, updateDoc, collection, getDocs, query, where } from "firebase/firestore";
+import { getFirestore, doc, setDoc, getDoc, updateDoc, collection, getDocs, deleteDoc } from "firebase/firestore";
 
 // ── FIREBASE CONFIG ───────────────────────────────────────────────────────────
 const firebaseConfig = {
@@ -34,12 +34,6 @@ const fmt = (n, curr = "KSh") => `${curr} ${Number(n || 0).toLocaleString("en-KE
 const fmtDate = (d) => d ? new Date(d).toLocaleDateString("en-KE", { day: "numeric", month: "short", year: "numeric" }) : "—";
 const thisMonth = () => new Date().toISOString().slice(0, 7);
 
-// Get ref code from URL
-const getRefCode = () => {
-  const params = new URLSearchParams(window.location.search);
-  return params.get("ref") || localStorage.getItem("bizos_ref") || null;
-};
-
 // ── FIREBASE HELPERS ──────────────────────────────────────────────────────────
 async function saveUserData(userId, key, data) {
   try {
@@ -66,88 +60,6 @@ async function getUserProfile(userId) {
     const snap = await getDoc(doc(db, "users", userId));
     return snap.exists() ? snap.data() : {};
   } catch (e) { return {}; }
-}
-
-// Save affiliate referral
-async function saveReferral(affiliateRef, newUserId, newUserEmail, newUserName) {
-  try {
-    // Find affiliate by ref code
-    const affSnap = await getDoc(doc(db, "affiliates", affiliateRef));
-    if (!affSnap.exists()) return;
-    
-    const affiliate = affSnap.data();
-    
-    // Save referral record
-    await setDoc(doc(db, "referrals", newUserId), {
-      affiliateRef,
-      affiliateName: affiliate.name,
-      affiliateEmail: affiliate.email,
-      affiliatePhone: affiliate.phone,
-      userId: newUserId,
-      userEmail: newUserEmail,
-      userName: newUserName,
-      status: "free", // becomes "paid" when they subscribe
-      earnings: 0,
-      createdAt: now(),
-    });
-
-    // Update affiliate referral count
-    await setDoc(doc(db, "affiliates", affiliateRef), {
-      ...affiliate,
-      referralCount: (affiliate.referralCount || 0) + 1,
-      lastReferral: now(),
-    });
-  } catch (e) { console.error("Referral save error:", e); }
-}
-
-// Get affiliate stats
-async function getAffiliateStats(refCode) {
-  try {
-    const affSnap = await getDoc(doc(db, "affiliates", refCode));
-    if (!affSnap.exists()) return null;
-    
-    const q = query(collection(db, "referrals"), where("affiliateRef", "==", refCode));
-    const refs = await getDocs(q);
-    const referrals = refs.docs.map(d => d.data());
-    
-    return {
-      ...affSnap.data(),
-      referrals,
-      totalReferrals: referrals.length,
-      paidReferrals: referrals.filter(r => r.status === "paid").length,
-      totalEarnings: referrals.filter(r => r.status === "paid").length * 5,
-    };
-  } catch (e) { return null; }
-}
-
-// Register affiliate
-async function registerAffiliate(name, email, phone, country, method) {
-  const refCode = name.toLowerCase().replace(/\s+/g, "").replace(/[^a-z0-9]/g, "").slice(0, 8) + Math.random().toString(36).slice(2, 6);
-  await setDoc(doc(db, "affiliates", refCode), {
-    refCode, name, email, phone, country, method,
-    referralCount: 0, totalEarnings: 0, createdAt: now(),
-  });
-  return refCode;
-}
-
-// Mark referral as paid when user upgrades
-async function markReferralPaid(userId) {
-  try {
-    const refSnap = await getDoc(doc(db, "referrals", userId));
-    if (!refSnap.exists()) return;
-    const ref = refSnap.data();
-    await setDoc(doc(db, "referrals", userId), { ...ref, status: "paid", paidAt: now() });
-    
-    // Update affiliate earnings
-    const affSnap = await getDoc(doc(db, "affiliates", ref.affiliateRef));
-    if (affSnap.exists()) {
-      const aff = affSnap.data();
-      await setDoc(doc(db, "affiliates", ref.affiliateRef), {
-        ...aff,
-        totalEarnings: (aff.totalEarnings || 0) + 5,
-      });
-    }
-  } catch (e) { console.error("Mark paid error:", e); }
 }
 
 // ── CLAUDE AI ─────────────────────────────────────────────────────────────────
@@ -275,202 +187,9 @@ const Loader = ({ text = "Loading..." }) => (
 );
 
 // ══════════════════════════════════════════════════════
-// AFFILIATE DASHBOARD
-// ══════════════════════════════════════════════════════
-function AffiliateDashboard({ refCode, onBack }) {
-  const [stats, setStats] = useState(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    getAffiliateStats(refCode).then(s => { setStats(s); setLoading(false); });
-  }, [refCode]);
-
-  if (loading) return <Loader text="Loading your stats..." />;
-  if (!stats) return (
-    <div style={{ minHeight: "100vh", background: C.bg, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: C.font }}>
-      <div style={{ textAlign: "center" }}>
-        <div style={{ fontSize: 40, marginBottom: 16 }}>❌</div>
-        <div style={{ fontFamily: C.display, fontSize: 20, fontWeight: 700 }}>Affiliate not found</div>
-        <Btn onClick={onBack} style={{ marginTop: 16 }} variant="secondary">Go Back</Btn>
-      </div>
-    </div>
-  );
-
-  const refUrl = `https://bizos-nine.vercel.app?ref=${refCode}`;
-
-  return (
-    <div style={{ minHeight: "100vh", background: C.bg, fontFamily: C.font }}>
-      <Fonts />
-      <div style={{ background: C.dark, padding: "20px 40px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <div style={{ fontFamily: C.display, fontSize: 20, fontWeight: 900, color: C.accentBright }}>BizOS Affiliate</div>
-        <Btn variant="ghost" onClick={onBack} style={{ color: "#fff", borderColor: "rgba(255,255,255,0.2)" }}>← Back</Btn>
-      </div>
-      <div style={{ maxWidth: 800, margin: "0 auto", padding: "40px 24px" }}>
-        <h2 style={{ fontFamily: C.display, fontSize: 28, fontWeight: 900, marginBottom: 4 }}>Welcome, {stats.name}! 👋</h2>
-        <p style={{ color: C.muted, marginBottom: 32 }}>Here's your affiliate performance dashboard.</p>
-
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 14, marginBottom: 32 }}>
-          <Stat label="Total Referrals" value={stats.totalReferrals} icon="👥" color={C.accent} />
-          <Stat label="Paying Users" value={stats.paidReferrals} icon="💰" color={C.gold} sub="KSh 500 each" />
-          <Stat label="Total Earned" value={`$${stats.totalEarnings}`} icon="🤑" color={C.accentBright} sub="Paid to M-Pesa" />
-          <Stat label="Pending" value={stats.totalReferrals - stats.paidReferrals} icon="⏳" color={C.blue} sub="Free users" />
-        </div>
-
-        <Card style={{ marginBottom: 24, background: C.accentLight, border: `1px solid ${C.accent}30` }}>
-          <div style={{ fontFamily: C.display, fontWeight: 700, fontSize: 16, marginBottom: 12, color: C.accent }}>Your Referral Link</div>
-          <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10, padding: "12px 16px", fontFamily: C.mono, fontSize: 13, color: C.accent, marginBottom: 12, wordBreak: "break-all" }}>
-            {refUrl}
-          </div>
-          <Btn onClick={() => { navigator.clipboard.writeText(refUrl); alert("✅ Link copied!"); }}>📋 Copy Link</Btn>
-        </Card>
-
-        <Card style={{ marginBottom: 24 }}>
-          <div style={{ fontFamily: C.display, fontWeight: 700, fontSize: 16, marginBottom: 16 }}>Your Referrals</div>
-          {stats.referrals.length === 0
-            ? <div style={{ color: C.muted, fontSize: 14, textAlign: "center", padding: 24 }}>No referrals yet. Share your link to start earning!</div>
-            : stats.referrals.map((r, i) => (
-              <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 0", borderBottom: `1px solid ${C.faint}` }}>
-                <div>
-                  <div style={{ fontWeight: 600, fontSize: 14 }}>{r.userName}</div>
-                  <div style={{ fontSize: 12, color: C.muted }}>{r.userEmail} · {fmtDate(r.createdAt)}</div>
-                </div>
-                <Badge color={r.status === "paid" ? C.accentBright : C.gold}>
-                  {r.status === "paid" ? "✓ PAID — $5 earned" : "FREE TRIAL"}
-                </Badge>
-              </div>
-            ))}
-        </Card>
-
-        <Card style={{ background: C.goldLight, border: `1px solid ${C.gold}30` }}>
-          <div style={{ fontFamily: C.display, fontWeight: 700, fontSize: 16, marginBottom: 8, color: C.gold }}>💰 How Payouts Work</div>
-          <p style={{ fontSize: 14, color: C.muted, lineHeight: 1.7, margin: 0 }}>
-            You earn $5 for every business that upgrades to Business plan through your link. Payouts via M-Pesa when you hit $20 minimum. We'll WhatsApp you at <strong>{stats.phone}</strong> when you're ready to withdraw.
-          </p>
-        </Card>
-      </div>
-    </div>
-  );
-}
-
-// ══════════════════════════════════════════════════════
-// AFFILIATE SIGNUP PAGE
-// ══════════════════════════════════════════════════════
-function AffiliateSignup({ onBack }) {
-  const [step, setStep] = useState("form"); // form | success
-  const [refCode, setRefCode] = useState("");
-  const [form, setForm] = useState({ name: "", email: "", phone: "", country: "Kenya", method: "WhatsApp" });
-  const [loading, setLoading] = useState(false);
-  const f = k => v => setForm(p => ({ ...p, [k]: v }));
-
-  // Check if viewing existing dashboard
-  const [checkCode, setCheckCode] = useState("");
-  const [viewMode, setViewMode] = useState("signup"); // signup | login | dashboard
-
-  if (viewMode === "dashboard") return <AffiliateDashboard refCode={checkCode} onBack={() => setViewMode("signup")} />;
-
-  async function submit() {
-    if (!form.name || !form.email || !form.phone) return alert("Fill all fields.");
-    setLoading(true);
-    const code = await registerAffiliate(form.name, form.email, form.phone, form.country, form.method);
-    setRefCode(code);
-    setStep("success");
-    setLoading(false);
-  }
-
-  const refUrl = `https://bizos-nine.vercel.app?ref=${refCode}`;
-  const shareMsg = `Hi! I found this free app called BizOS that helps small businesses track their stock, sales and customers — with AI insights. It's completely free to start. Check it out: ${refUrl}`;
-
-  return (
-    <div style={{ minHeight: "100vh", background: C.dark, fontFamily: C.font, color: "#fff" }}>
-      <Fonts />
-      <div style={{ background: "rgba(0,0,0,0.3)", padding: "20px 40px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <div style={{ fontFamily: C.display, fontSize: 20, fontWeight: 900, color: C.accentBright }}>🌍 BizOS Affiliates</div>
-        <Btn variant="ghost" onClick={onBack} style={{ color: "#fff", borderColor: "rgba(255,255,255,0.2)" }}>← Back to BizOS</Btn>
-      </div>
-
-      {step === "form" && (
-        <div style={{ maxWidth: 560, margin: "0 auto", padding: "60px 24px" }}>
-          <div style={{ textAlign: "center", marginBottom: 40 }}>
-            <div style={{ display: "inline-block", background: "rgba(34,197,94,0.15)", border: "1px solid rgba(34,197,94,0.3)", borderRadius: 100, padding: "6px 20px", fontSize: 12, color: C.accentBright, fontFamily: C.mono, marginBottom: 20 }}>
-              💰 EARN $5 PER REFERRAL
-            </div>
-            <h1 style={{ fontFamily: C.display, fontSize: "clamp(32px, 6vw, 56px)", fontWeight: 900, lineHeight: 1.05, margin: "0 0 16px" }}>
-              Earn money<br /><span style={{ color: C.accentBright }}>selling BizOS</span>
-            </h1>
-            <p style={{ color: "rgba(255,255,255,0.5)", fontSize: 16, lineHeight: 1.7 }}>
-              Share BizOS with shop owners. Every time someone subscribes through your link — you earn $5. Every month they stay.
-            </p>
-          </div>
-
-          <div style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 20, padding: 32, marginBottom: 24 }}>
-            <Input label="Full Name" value={form.name} onChange={f("name")} placeholder="John Kamau" />
-            <Input label="Email" value={form.email} onChange={f("email")} placeholder="john@gmail.com" type="email" />
-            <Input label="WhatsApp Number" value={form.phone} onChange={f("phone")} placeholder="+254 700 000 000" />
-            <Select label="Country" value={form.country} onChange={f("country")} options={[
-              { value: "Kenya", label: "Kenya" }, { value: "Nigeria", label: "Nigeria" },
-              { value: "Ghana", label: "Ghana" }, { value: "Uganda", label: "Uganda" },
-              { value: "Tanzania", label: "Tanzania" }, { value: "Other", label: "Other" },
-            ]} />
-            <Select label="How will you promote?" value={form.method} onChange={f("method")} options={[
-              { value: "WhatsApp", label: "WhatsApp groups" },
-              { value: "Facebook", label: "Facebook / Instagram" },
-              { value: "TikTok", label: "TikTok" },
-              { value: "Direct", label: "Direct to businesses" },
-              { value: "Other", label: "Other" },
-            ]} />
-            <Btn full size="lg" onClick={submit} disabled={loading} style={{ background: C.accentBright, color: "#000" }}>
-              {loading ? "Creating your link..." : "Get My Affiliate Link →"}
-            </Btn>
-          </div>
-
-          <div style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 16, padding: 20 }}>
-            <div style={{ fontFamily: C.display, fontWeight: 700, fontSize: 15, marginBottom: 8 }}>Already have a link?</div>
-            <div style={{ display: "flex", gap: 10 }}>
-              <input value={checkCode} onChange={e => setCheckCode(e.target.value)} placeholder="Enter your ref code (e.g. john1234)"
-                style={{ flex: 1, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.15)", borderRadius: 10, padding: "10px 14px", color: "#fff", fontFamily: C.font, fontSize: 14, outline: "none" }} />
-              <Btn onClick={() => { if (checkCode) setViewMode("dashboard"); }} variant="ghost" style={{ color: "#fff", borderColor: "rgba(255,255,255,0.2)" }}>View Stats</Btn>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {step === "success" && (
-        <div style={{ maxWidth: 560, margin: "0 auto", padding: "60px 24px", textAlign: "center" }}>
-          <div style={{ fontSize: 64, marginBottom: 20 }}>🎉</div>
-          <h2 style={{ fontFamily: C.display, fontSize: 36, fontWeight: 900, marginBottom: 8 }}>You're in!</h2>
-          <p style={{ color: "rgba(255,255,255,0.5)", marginBottom: 32, fontSize: 15, lineHeight: 1.7 }}>
-            Welcome to the BizOS affiliate program. Your unique link is ready. Share it everywhere and start earning.
-          </p>
-
-          <div style={{ background: "rgba(255,255,255,0.05)", border: `1px solid ${C.accentBright}40`, borderRadius: 16, padding: 24, marginBottom: 24 }}>
-            <div style={{ fontSize: 12, fontFamily: C.mono, color: C.accentBright, marginBottom: 10, textTransform: "uppercase", letterSpacing: "0.1em" }}>Your Referral Link</div>
-            <div style={{ background: "rgba(255,255,255,0.05)", borderRadius: 10, padding: "12px 16px", fontFamily: C.mono, fontSize: 13, color: C.accentBright, wordBreak: "break-all", marginBottom: 12 }}>
-              {refUrl}
-            </div>
-            <div style={{ fontSize: 11, color: "rgba(255,255,255,0.3)", fontFamily: C.mono, marginBottom: 16 }}>Your ref code: <strong style={{ color: C.accentBright }}>{refCode}</strong> — save this to check your stats later</div>
-            <Btn onClick={() => { navigator.clipboard.writeText(refUrl); alert("✅ Copied!"); }} style={{ background: C.accentBright, color: "#000", marginRight: 10 }}>📋 Copy Link</Btn>
-            <Btn onClick={() => { setCheckCode(refCode); setViewMode("dashboard"); }} variant="ghost" style={{ color: "#fff", borderColor: "rgba(255,255,255,0.2)" }}>View Dashboard</Btn>
-          </div>
-
-          <div style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 16, padding: 20, textAlign: "left", marginBottom: 24 }}>
-            <div style={{ fontFamily: C.display, fontWeight: 700, fontSize: 15, marginBottom: 10 }}>📱 Ready-to-send WhatsApp message</div>
-            <div style={{ fontSize: 13, color: "rgba(255,255,255,0.6)", lineHeight: 1.8, marginBottom: 12 }}>{shareMsg}</div>
-            <Btn onClick={() => { navigator.clipboard.writeText(shareMsg); alert("✅ Message copied! Paste in WhatsApp."); }} variant="ghost" style={{ color: C.accentBright, borderColor: `${C.accentBright}40` }}>📋 Copy Message</Btn>
-          </div>
-
-          <p style={{ color: "rgba(255,255,255,0.3)", fontSize: 12 }}>
-            Payouts via M-Pesa when you hit $20. We'll WhatsApp you at {form.phone}.
-          </p>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ══════════════════════════════════════════════════════
 // LANDING
 // ══════════════════════════════════════════════════════
-function Landing({ onStart, onAffiliate }) {
+function Landing({ onStart }) {
   return (
     <div style={{ minHeight: "100vh", background: C.dark, color: "#fff", fontFamily: C.font }}>
       <Fonts />
@@ -482,7 +201,6 @@ function Landing({ onStart, onAffiliate }) {
           <div style={{ fontFamily: C.display, fontSize: 22, fontWeight: 900 }}>BizOS</div>
         </div>
         <div style={{ display: "flex", gap: 12 }}>
-          <Btn variant="ghost" onClick={onAffiliate} style={{ color: C.accentBright, borderColor: `${C.accentBright}40` }}>💰 Earn Money</Btn>
           <Btn variant="ghost" onClick={onStart} style={{ color: "#fff", borderColor: "rgba(255,255,255,0.2)" }}>Login</Btn>
           <Btn onClick={onStart} style={{ background: C.accentBright, color: "#000" }}>Start Free</Btn>
         </div>
@@ -500,7 +218,7 @@ function Landing({ onStart, onAffiliate }) {
         <Btn size="lg" onClick={onStart} style={{ background: C.accentBright, color: "#000" }}>Start Free Today →</Btn>
         <p style={{ color: "rgba(255,255,255,0.3)", fontSize: 13, marginTop: 16, fontFamily: C.mono }}>Free forever · No credit card · Upgrade anytime</p>
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 20, maxWidth: 900, margin: "0 auto", padding: "0 24px 60px" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 20, maxWidth: 900, margin: "0 auto", padding: "0 24px 80px" }}>
         {[
           { icon: "📦", title: "Inventory", desc: "Track every product. Get low-stock alerts before you run out." },
           { icon: "💰", title: "Sales Tracking", desc: "Record every sale. Know exactly how much you make daily." },
@@ -513,11 +231,6 @@ function Landing({ onStart, onAffiliate }) {
             <div style={{ fontSize: 13, color: "rgba(255,255,255,0.5)", lineHeight: 1.6 }}>{f.desc}</div>
           </Card>
         ))}
-      </div>
-      <div style={{ background: "rgba(34,197,94,0.1)", border: "1px solid rgba(34,197,94,0.2)", borderRadius: 20, maxWidth: 700, margin: "0 auto 80px", padding: "32px 40px", textAlign: "center", position: "relative", zIndex: 10 }}>
-        <div style={{ fontFamily: C.display, fontSize: 24, fontWeight: 900, marginBottom: 8 }}>Know a business owner? 💰</div>
-        <p style={{ color: "rgba(255,255,255,0.5)", marginBottom: 20, fontSize: 14 }}>Join our affiliate program. Earn $5 for every business you bring to BizOS — every month they stay.</p>
-        <Btn onClick={onAffiliate} style={{ background: C.accentBright, color: "#000" }}>Join Affiliate Program →</Btn>
       </div>
     </div>
   );
@@ -541,14 +254,6 @@ function Auth({ onAuth }) {
         const cred = await createUserWithEmailAndPassword(auth, form.email, form.pass);
         const userData = { id: cred.user.uid, name: form.name, business: form.business, phone: form.phone, email: form.email, currency: form.currency, isPro: false, createdAt: today() };
         await setDoc(doc(db, "users", cred.user.uid), userData);
-        
-        // Track referral if user came from affiliate link
-        const refCode = getRefCode();
-        if (refCode) {
-          await saveReferral(refCode, cred.user.uid, form.email, form.name);
-          localStorage.removeItem("bizos_ref");
-        }
-        
         onAuth(userData);
       } else {
         if (!form.email || !form.pass) { setErr("Enter email and password."); setLoading(false); return; }
@@ -566,12 +271,14 @@ function Auth({ onAuth }) {
     <div style={{ minHeight: "100vh", background: C.bg, display: "flex", fontFamily: C.font }}>
       <Fonts />
       <div style={{ width: "42%", background: C.dark, padding: 48, display: "flex", flexDirection: "column", justifyContent: "center" }}>
-        <div style={{ fontFamily: C.display, fontSize: 28, fontWeight: 900, color: "#fff" }}>🌍 <span style={{ color: C.accentBright }}>BizOS</span></div>
+        <div style={{ fontFamily: C.display, fontSize: 28, fontWeight: 900, color: "#fff" }}>
+          🌍 <span style={{ color: C.accentBright }}>BizOS</span>
+        </div>
         <p style={{ color: "rgba(255,255,255,0.4)", fontSize: 14, lineHeight: 1.8, marginTop: 24, maxWidth: 300 }}>
-          The operating system for African businesses. Your data saved to cloud — access from any device.
+          The operating system for African businesses. Track inventory, sales, and customers — with AI insights.
         </p>
         <div style={{ marginTop: 40, display: "flex", flexDirection: "column", gap: 14 }}>
-          {["📦 Real-time inventory", "💰 Daily sales tracking", "🧠 AI business insights", "☁️ Cloud sync across devices"].map(f => (
+          {["📦 Real-time inventory", "💰 Daily sales tracking", "🧠 AI business insights", "☁️ Data saved to cloud"].map(f => (
             <div key={f} style={{ color: "rgba(255,255,255,0.6)", fontSize: 13 }}>{f}</div>
           ))}
         </div>
@@ -654,14 +361,16 @@ function Dashboard({ user, products, sales, customers, expenses, onNav }) {
               );
             })}
         </Card>
-        <Card>
-          <div style={{ fontFamily: C.display, fontWeight: 700, fontSize: 16, marginBottom: 14 }}>Quick Actions</div>
-          {[{ label: "📦 Add Product", nav: "inventory" }, { label: "💰 Record Sale", nav: "sales" }, { label: "👥 New Customer", nav: "customers" }, { label: "🧠 Ask AI", nav: "ai" }].map(a => (
-            <button key={a.nav} onClick={() => onNav(a.nav)} style={{ width: "100%", background: C.faint, border: `1px solid ${C.border}`, borderRadius: 8, padding: "10px 14px", marginBottom: 8, fontFamily: C.font, fontSize: 13, fontWeight: 600, color: C.text, cursor: "pointer", textAlign: "left" }}>
-              {a.label}
-            </button>
-          ))}
-        </Card>
+        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          <Card>
+            <div style={{ fontFamily: C.display, fontWeight: 700, fontSize: 16, marginBottom: 14 }}>Quick Actions</div>
+            {[{ label: "📦 Add Product", nav: "inventory" }, { label: "💰 Record Sale", nav: "sales" }, { label: "👥 New Customer", nav: "customers" }, { label: "🧠 Ask AI", nav: "ai" }].map(a => (
+              <button key={a.nav} onClick={() => onNav(a.nav)} style={{ width: "100%", background: C.faint, border: `1px solid ${C.border}`, borderRadius: 8, padding: "10px 14px", marginBottom: 8, fontFamily: C.font, fontSize: 13, fontWeight: 600, color: C.text, cursor: "pointer", textAlign: "left" }}>
+                {a.label}
+              </button>
+            ))}
+          </Card>
+        </div>
       </div>
       {lowStock > 0 && (
         <Card style={{ background: C.redLight, border: "1px solid #fca5a5", marginTop: 20 }}>
@@ -691,7 +400,8 @@ function Inventory({ products, setProducts, user, isPro }) {
 
   function add() {
     if (!form.name || !form.sellPrice || !form.qty) return alert("Fill required fields.");
-    setProducts(prev => [...prev, { ...form, id: uid(), sellPrice: Number(form.sellPrice), buyPrice: Number(form.buyPrice || 0), qty: Number(form.qty), lowStockAlert: Number(form.lowStockAlert || 5), createdAt: today() }]);
+    const newProduct = { ...form, id: uid(), sellPrice: Number(form.sellPrice), buyPrice: Number(form.buyPrice || 0), qty: Number(form.qty), lowStockAlert: Number(form.lowStockAlert || 5), createdAt: today() };
+    setProducts(prev => [...prev, newProduct]);
     setForm({ name: "", category: "", buyPrice: "", sellPrice: "", qty: "", unit: "pcs", lowStockAlert: "5" });
     setShowAdd(false);
   }
@@ -705,7 +415,7 @@ function Inventory({ products, setProducts, user, isPro }) {
           <h2 style={{ fontFamily: C.display, fontWeight: 900, fontSize: 24, margin: "0 0 4px" }}>Inventory</h2>
           <div style={{ color: C.muted, fontSize: 13 }}>{products.length} products</div>
         </div>
-        {canAdd ? <Btn onClick={() => setShowAdd(true)}>+ Add Product</Btn> : <Badge color={C.gold}>Upgrade for unlimited</Badge>}
+        {canAdd ? <Btn onClick={() => setShowAdd(true)}>+ Add Product</Btn> : <Badge color={C.gold}>Upgrade for more</Badge>}
       </div>
       <Input value={search} onChange={setSearch} placeholder="🔍 Search products..." />
       {showAdd && (
@@ -825,7 +535,7 @@ function Sales({ sales, setSales, products, setProducts, customers, user }) {
             <div>
               <div style={{ fontSize: 12, fontWeight: 700, color: C.muted, marginBottom: 10, textTransform: "uppercase" }}>Select Products</div>
               <div style={{ maxHeight: 280, overflowY: "auto", border: `1px solid ${C.border}`, borderRadius: 10, padding: 8 }}>
-                {products.length === 0 ? <div style={{ padding: 20, textAlign: "center", color: C.muted, fontSize: 13 }}>No products yet.</div>
+                {products.length === 0 ? <div style={{ padding: 20, textAlign: "center", color: C.muted, fontSize: 13 }}>No products yet. Add products first.</div>
                   : products.map(p => (
                     <div key={p.id} onClick={() => addToCart(p)} style={{ display: "flex", justifyContent: "space-between", padding: "10px 12px", borderRadius: 8, cursor: "pointer", marginBottom: 4, background: C.faint }}
                       onMouseEnter={e => e.currentTarget.style.background = C.accentLight}
@@ -845,7 +555,9 @@ function Sales({ sales, setSales, products, setProducts, customers, user }) {
                 {cart.length === 0 ? <div style={{ color: C.muted, fontSize: 13, textAlign: "center", marginTop: 40 }}>Click products to add</div>
                   : cart.map(item => (
                     <div key={item.productId} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-                      <div style={{ flex: 1, fontSize: 13, fontWeight: 600 }}>{item.name}</div>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: 13, fontWeight: 600 }}>{item.name}</div>
+                      </div>
                       <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                         <button onClick={() => setCart(prev => item.qty <= 1 ? prev.filter(i => i.productId !== item.productId) : prev.map(i => i.productId === item.productId ? { ...i, qty: i.qty - 1 } : i))} style={{ width: 24, height: 24, border: `1px solid ${C.border}`, borderRadius: 4, background: C.faint, cursor: "pointer" }}>-</button>
                         <span style={{ fontSize: 13, fontFamily: C.mono, minWidth: 20, textAlign: "center" }}>{item.qty}</span>
@@ -855,9 +567,9 @@ function Sales({ sales, setSales, products, setProducts, customers, user }) {
                     </div>
                   ))}
               </div>
-              <Select label="Customer" value={selectedCustomer} onChange={setSelectedCustomer} options={[{ value: "", label: "Walk-in customer" }, ...customers.map(c => ({ value: c.id, label: c.name }))]} />
-              <Select label="Payment" value={payMethod} onChange={setPayMethod} options={[{ value: "cash", label: "💵 Cash" }, { value: "mpesa", label: "📱 M-Pesa" }, { value: "transfer", label: "🏦 Bank Transfer" }, { value: "pos", label: "💳 POS" }]} />
-              <div style={{ background: C.accentLight, borderRadius: 10, padding: 14, marginBottom: 16, display: "flex", justifyContent: "space-between" }}>
+              <Select label="Customer (optional)" value={selectedCustomer} onChange={setSelectedCustomer} options={[{ value: "", label: "Walk-in customer" }, ...customers.map(c => ({ value: c.id, label: c.name }))]} />
+              <Select label="Payment Method" value={payMethod} onChange={setPayMethod} options={[{ value: "cash", label: "💵 Cash" }, { value: "mpesa", label: "📱 M-Pesa" }, { value: "transfer", label: "🏦 Bank Transfer" }, { value: "pos", label: "💳 POS" }]} />
+              <div style={{ background: C.accentLight, borderRadius: 10, padding: 14, marginBottom: 16, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <span style={{ fontWeight: 700, color: C.accent }}>Total</span>
                 <span style={{ fontFamily: C.mono, fontWeight: 900, fontSize: 20, color: C.accent }}>{fmt(cartTotal, curr)}</span>
               </div>
@@ -875,7 +587,7 @@ function Sales({ sales, setSales, products, setProducts, customers, user }) {
               return (
                 <Card key={sale.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
                   <div>
-                    <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4 }}>{cust?.name || "Walk-in"}</div>
+                    <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4 }}>{cust?.name || "Walk-in Customer"}</div>
                     <div style={{ fontSize: 12, color: C.muted }}>{sale.items?.map(i => `${i.name} ×${i.qty}`).join(", ")}</div>
                     <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>{fmtDate(sale.date)} · {sale.payMethod}</div>
                   </div>
@@ -911,7 +623,7 @@ function Customers({ customers, setCustomers, sales, user, isPro }) {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
         <div>
           <h2 style={{ fontFamily: C.display, fontWeight: 900, fontSize: 24, margin: "0 0 4px" }}>Customers</h2>
-          <div style={{ color: C.muted, fontSize: 13 }}>{customers.length} total{!isPro ? ` · ${3 - customers.length} free slots left` : ""}</div>
+          <div style={{ color: C.muted, fontSize: 13 }}>{customers.length} total{!isPro ? ` · Free: ${3 - customers.length} slots left` : ""}</div>
         </div>
         {canAdd ? <Btn onClick={() => setShowAdd(true)}>+ Add Customer</Btn> : <Badge color={C.gold}>Upgrade to add more</Badge>}
       </div>
@@ -922,7 +634,7 @@ function Customers({ customers, setCustomers, sales, user, isPro }) {
           <Input label="Email" value={form.email} onChange={f("email")} placeholder="jane@email.com" />
           <div style={{ marginBottom: 14 }}>
             <div style={{ fontSize: 12, fontWeight: 600, color: C.muted, marginBottom: 6 }}>Notes</div>
-            <textarea value={form.notes} onChange={e => f("notes")(e.target.value)} placeholder="Notes about this customer..." rows={3}
+            <textarea value={form.notes} onChange={e => f("notes")(e.target.value)} placeholder="Prefers bulk orders..." rows={3}
               style={{ width: "100%", boxSizing: "border-box", border: `1.5px solid ${C.border}`, borderRadius: 10, padding: "10px 14px", fontFamily: C.font, fontSize: 14, color: C.text, background: C.bg, outline: "none", resize: "vertical" }} />
           </div>
           <div style={{ display: "flex", gap: 10 }}>
@@ -937,6 +649,7 @@ function Customers({ customers, setCustomers, sales, user, isPro }) {
           <div style={{ display: "grid", gap: 12 }}>
             {customers.map(c => {
               const spent = sales.filter(s => s.customerId === c.id).reduce((s, x) => s + x.total, 0);
+              const purchases = sales.filter(s => s.customerId === c.id).length;
               return (
                 <Card key={c.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 16 }}>
                   <div style={{ display: "flex", gap: 16, alignItems: "center", flex: 1 }}>
@@ -950,7 +663,7 @@ function Customers({ customers, setCustomers, sales, user, isPro }) {
                   </div>
                   <div style={{ textAlign: "right" }}>
                     <div style={{ fontFamily: C.mono, fontWeight: 700, color: C.accent }}>{fmt(spent, curr)}</div>
-                    <div style={{ fontSize: 12, color: C.muted }}>{sales.filter(s => s.customerId === c.id).length} purchases</div>
+                    <div style={{ fontSize: 12, color: C.muted }}>{purchases} purchases</div>
                   </div>
                 </Card>
               );
@@ -991,7 +704,7 @@ function Expenses({ expenses, setExpenses, user }) {
         <Modal title="Add Expense" onClose={() => setShowAdd(false)}>
           <Input label="Description *" value={form.description} onChange={f("description")} placeholder="Generator fuel..." />
           <Input label={`Amount (${curr}) *`} value={form.amount} onChange={f("amount")} placeholder="5000" type="number" />
-          <Select label="Category" value={form.category} onChange={f("category")} options={[{ value: "operations", label: "Operations" }, { value: "staff", label: "Staff / Salary" }, { value: "rent", label: "Rent" }, { value: "transport", label: "Transport" }, { value: "marketing", label: "Marketing" }, { value: "other", label: "Other" }]} />
+          <Select label="Category" value={form.category} onChange={f("category")} options={[{ value: "operations", label: "Operations" }, { value: "staff", label: "Staff / Salary" }, { value: "rent", label: "Rent / Utilities" }, { value: "transport", label: "Transport" }, { value: "marketing", label: "Marketing" }, { value: "other", label: "Other" }]} />
           <Input label="Date" value={form.date} onChange={f("date")} type="date" />
           <div style={{ display: "flex", gap: 10 }}>
             <Btn onClick={add}>Save</Btn>
@@ -1000,7 +713,7 @@ function Expenses({ expenses, setExpenses, user }) {
         </Modal>
       )}
       {expenses.length === 0
-        ? <EmptyState icon="💸" title="No expenses" desc="Track your spending." action="+ Add Expense" onAction={() => setShowAdd(true)} />
+        ? <EmptyState icon="💸" title="No expenses" desc="Track your spending to know your real profit." action="+ Add Expense" onAction={() => setShowAdd(true)} />
         : (
           <div style={{ display: "grid", gap: 10 }}>
             {[...expenses].reverse().map(e => (
@@ -1025,24 +738,30 @@ function Expenses({ expenses, setExpenses, user }) {
 // AI BRAIN
 // ══════════════════════════════════════════════════════
 function AIBrain({ user, products, sales, customers, expenses }) {
-  const [msgs, setMsgs] = useState([{ role: "ai", text: `Hello ${user.name?.split(" ")[0]}! I'm your BizOS AI advisor. I know everything about ${user.business}. Ask me anything.` }]);
+  const [msgs, setMsgs] = useState([{ role: "ai", text: `Hello ${user.name?.split(" ")[0]}! I'm your BizOS AI advisor. I know everything about ${user.business}. Ask me anything about your business.` }]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const bottomRef = useRef();
   const curr = user.currency || "KSh";
 
-  const PROMPTS = ["What's my best selling product?", "How much profit this month?", "Which customer buys most?", "What's running low?", "What day do I sell most?"];
+  const PROMPTS = ["What's my best selling product?", "How much profit this month?", "Which customer buys the most?", "What products are running low?", "What day do I sell the most?"];
 
   function buildSystem() {
     const monthRevenue = sales.filter(s => s.date?.startsWith(thisMonth())).reduce((s, x) => s + x.total, 0);
     const monthExpenses = expenses.filter(e => e.date?.startsWith(thisMonth())).reduce((s, e) => s + Number(e.amount), 0);
     const topProducts = products.map(p => ({ name: p.name, sold: sales.flatMap(s => s.items || []).filter(i => i.productId === p.id).reduce((s, i) => s + i.qty, 0) })).sort((a, b) => b.sold - a.sold).slice(0, 5);
     const topCustomers = customers.map(c => ({ name: c.name, spent: sales.filter(s => s.customerId === c.id).reduce((s, x) => s + x.total, 0) })).sort((a, b) => b.spent - a.spent).slice(0, 5);
-    return `You are the AI business advisor for ${user.business}, owned by ${user.name}. Be direct, helpful, insightful. Speak like a smart advisor.
+    return `You are the AI business advisor for ${user.business}, owned by ${user.name} in Kenya. You have full access to their data. Be direct, helpful, and insightful. Speak like a smart advisor who cares about their success.
 
-BUSINESS: Currency: ${curr} | Products: ${products.length} | Customers: ${customers.length}
-FINANCES: Revenue this month: ${curr} ${monthRevenue.toLocaleString()} | Expenses: ${curr} ${monthExpenses.toLocaleString()} | Profit: ${curr} ${(monthRevenue - monthExpenses).toLocaleString()}
-LOW STOCK: ${products.filter(p => p.qty <= (p.lowStockAlert || 5)).map(p => p.name).join(", ") || "None"}
+BUSINESS DATA:
+- Currency: ${curr}
+- Products: ${products.length}
+- Customers: ${customers.length}
+- This month revenue: ${curr} ${monthRevenue.toLocaleString()}
+- This month expenses: ${curr} ${monthExpenses.toLocaleString()}
+- Estimated profit: ${curr} ${(monthRevenue - monthExpenses).toLocaleString()}
+- Low stock: ${products.filter(p => p.qty <= (p.lowStockAlert || 5)).map(p => p.name).join(", ") || "None"}
+
 TOP PRODUCTS: ${topProducts.map((p, i) => `${i + 1}. ${p.name} (${p.sold} sold)`).join(", ") || "No sales yet"}
 TOP CUSTOMERS: ${topCustomers.map((c, i) => `${i + 1}. ${c.name} (${curr} ${c.spent.toLocaleString()})`).join(", ") || "None yet"}
 
@@ -1112,25 +831,22 @@ function UpgradeModal({ user, onUpgrade, onClose }) {
       <div style={{ textAlign: "center", marginBottom: 24 }}>
         <div style={{ fontSize: 48, marginBottom: 12 }}>⚡</div>
         <div style={{ fontFamily: C.display, fontSize: 26, fontWeight: 900, marginBottom: 8 }}>Upgrade to Business</div>
-        <p style={{ color: C.muted, fontSize: 14, lineHeight: 1.6 }}>Unlock unlimited everything.</p>
+        <p style={{ color: C.muted, fontSize: 14, lineHeight: 1.6 }}>Unlock unlimited everything and run your business without limits.</p>
       </div>
       <div style={{ background: C.accentLight, borderRadius: 12, padding: 20, marginBottom: 24 }}>
-        {["✓ Unlimited products", "✓ Unlimited customers", "✓ Full sales history", "✓ AI business insights", "✓ Expense tracking"].map(f => (
+        {["✓ Unlimited products & inventory", "✓ Unlimited customers", "✓ Full sales history", "✓ AI business insights", "✓ Staff & expense tracking"].map(f => (
           <div key={f} style={{ fontSize: 14, fontWeight: 600, color: C.accent, padding: "5px 0" }}>{f}</div>
         ))}
       </div>
       <div style={{ textAlign: "center", marginBottom: 20 }}>
-        <span style={{ fontFamily: C.display, fontWeight: 900, fontSize: 36 }}>KSh 1,500</span>
+        <span style={{ fontFamily: C.display, fontWeight: 900, fontSize: 36, color: C.text }}>KSh 1,500</span>
         <span style={{ color: C.muted }}>/month</span>
       </div>
       <Input label="Email" value={email} onChange={setEmail} type="email" />
-      <Btn full size="lg" onClick={() => openPaystack(email, 1500, async (ref) => {
-        await onUpgrade();
-        alert("🎉 Welcome to Business! Ref: " + ref);
-      })}>
+      <Btn full size="lg" onClick={() => openPaystack(email, 1500, async (ref) => { await onUpgrade(); alert("🎉 Welcome to Business! Ref: " + ref); })}>
         Pay KSh 1,500/month →
       </Btn>
-      <p style={{ textAlign: "center", fontSize: 12, color: C.muted, marginTop: 12 }}>Cancel anytime.</p>
+      <p style={{ textAlign: "center", fontSize: 12, color: C.muted, marginTop: 12 }}>Cancel anytime. Instant activation.</p>
     </Modal>
   );
 }
@@ -1147,8 +863,10 @@ function AppShell({ user: initialUser, onLogout }) {
   const [sales, setSalesState] = useState([]);
   const [customers, setCustomersState] = useState([]);
   const [expenses, setExpensesState] = useState([]);
+
   const userId = user.id;
 
+  // Load all data from Firebase on mount
   useEffect(() => {
     async function loadData() {
       setLoading(true);
@@ -1159,23 +877,55 @@ function AppShell({ user: initialUser, onLogout }) {
         getUserData(userId, "expenses", []),
         getUserProfile(userId),
       ]);
-      setProductsState(p); setSalesState(s); setCustomersState(c); setExpensesState(e);
+      setProductsState(p);
+      setSalesState(s);
+      setCustomersState(c);
+      setExpensesState(e);
       if (profile.isPro !== undefined) setUser(u => ({ ...u, isPro: profile.isPro }));
       setLoading(false);
     }
     loadData();
   }, [userId]);
 
-  const setProducts = (updater) => setProductsState(prev => { const next = typeof updater === "function" ? updater(prev) : updater; saveUserData(userId, "products", next); return next; });
-  const setSales = (updater) => setSalesState(prev => { const next = typeof updater === "function" ? updater(prev) : updater; saveUserData(userId, "sales", next); return next; });
-  const setCustomers = (updater) => setCustomersState(prev => { const next = typeof updater === "function" ? updater(prev) : updater; saveUserData(userId, "customers", next); return next; });
-  const setExpenses = (updater) => setExpensesState(prev => { const next = typeof updater === "function" ? updater(prev) : updater; saveUserData(userId, "expenses", next); return next; });
+  // Save to Firebase whenever data changes
+  const setProducts = (updater) => {
+    setProductsState(prev => {
+      const next = typeof updater === "function" ? updater(prev) : updater;
+      saveUserData(userId, "products", next);
+      return next;
+    });
+  };
+  const setSales = (updater) => {
+    setSalesState(prev => {
+      const next = typeof updater === "function" ? updater(prev) : updater;
+      saveUserData(userId, "sales", next);
+      return next;
+    });
+  };
+  const setCustomers = (updater) => {
+    setCustomersState(prev => {
+      const next = typeof updater === "function" ? updater(prev) : updater;
+      saveUserData(userId, "customers", next);
+      return next;
+    });
+  };
+  const setExpenses = (updater) => {
+    setExpensesState(prev => {
+      const next = typeof updater === "function" ? updater(prev) : updater;
+      saveUserData(userId, "expenses", next);
+      return next;
+    });
+  };
 
   async function upgrade() {
     await setUserPro(userId, true);
-    await markReferralPaid(userId); // Pay affiliate if user was referred
     setUser(u => ({ ...u, isPro: true }));
     setShowUpgrade(false);
+  }
+
+  async function logout() {
+    await signOut(auth);
+    onLogout();
   }
 
   if (loading) return <Loader text="Loading your business data..." />;
@@ -1205,7 +955,7 @@ function AppShell({ user: initialUser, onLogout }) {
         </div>
         <nav style={{ flex: 1, padding: "12px 10px", overflowY: "auto" }}>
           {NAV.map(n => (
-            <button key={n.id} onClick={() => setNav(n.id)} style={{ width: "100%", display: "flex", alignItems: "center", gap: 12, padding: "11px 12px", border: "none", borderRadius: 10, cursor: "pointer", fontFamily: C.font, fontWeight: 600, fontSize: 14, marginBottom: 2, background: nav === n.id ? C.accentLight : "transparent", color: nav === n.id ? C.accent : C.muted }}>
+            <button key={n.id} onClick={() => setNav(n.id)} style={{ width: "100%", display: "flex", alignItems: "center", gap: 12, padding: "11px 12px", border: "none", borderRadius: 10, cursor: "pointer", fontFamily: C.font, fontWeight: 600, fontSize: 14, marginBottom: 2, transition: "all 0.15s", background: nav === n.id ? C.accentLight : "transparent", color: nav === n.id ? C.accent : C.muted }}>
               <span>{n.icon}</span> {n.label}
             </button>
           ))}
@@ -1216,7 +966,7 @@ function AppShell({ user: initialUser, onLogout }) {
               ⚡ Upgrade — KSh 1,500/mo
             </button>
           )}
-          <button onClick={async () => { await signOut(auth); onLogout(); }} style={{ width: "100%", background: "transparent", border: `1px solid ${C.border}`, borderRadius: 10, padding: "9px 12px", color: C.muted, fontFamily: C.font, fontSize: 13, cursor: "pointer" }}>
+          <button onClick={logout} style={{ width: "100%", background: "transparent", border: `1px solid ${C.border}`, borderRadius: 10, padding: "9px 12px", color: C.muted, fontFamily: C.font, fontSize: 13, cursor: "pointer" }}>
             Logout
           </button>
         </div>
@@ -1241,11 +991,6 @@ export default function BizOS() {
   const [user, setUser] = useState(null);
 
   useEffect(() => {
-    // Save ref code from URL to localStorage
-    const params = new URLSearchParams(window.location.search);
-    const ref = params.get("ref");
-    if (ref) localStorage.setItem("bizos_ref", ref);
-
     const unsub = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
         const profile = await getUserProfile(firebaseUser.uid);
@@ -1258,10 +1003,12 @@ export default function BizOS() {
     return unsub;
   }, []);
 
+  function login(u) { setUser(u); setScreen("app"); }
+  function logout() { setUser(null); setScreen("landing"); }
+
   if (screen === "loading") return <Loader text="Starting BizOS..." />;
-  if (screen === "affiliate") return <AffiliateSignup onBack={() => setScreen("landing")} />;
-  if (screen === "landing") return <Landing onStart={() => setScreen("auth")} onAffiliate={() => setScreen("affiliate")} />;
-  if (screen === "auth") return <Auth onAuth={(u) => { setUser(u); setScreen("app"); }} />;
-  if (screen === "app" && user) return <AppShell user={user} onLogout={() => { setUser(null); setScreen("landing"); }} />;
+  if (screen === "landing") return <Landing onStart={() => setScreen("auth")} />;
+  if (screen === "auth") return <Auth onAuth={login} />;
+  if (screen === "app" && user) return <AppShell user={user} onLogout={logout} />;
   return null;
 }
