@@ -1136,7 +1136,60 @@ function UpgradeModal({ user, onUpgrade, onClose }) {
 }
 
 // ══════════════════════════════════════════════════════
-// APP SHELL
+// Afunction FeedbackForm({ user }) {
+  const [msg, setMsg] = useState("");
+  const [type, setType] = useState("bug");
+  const [sent, setSent] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  async function send() {
+    if (!msg.trim()) return alert("Write your feedback first.");
+    setLoading(true);
+    try {
+      await setDoc(doc(db, "feedback", uid()), {
+        userId: user.id,
+        userName: user.name,
+        userEmail: user.email,
+        business: user.business,
+        type,
+        message: msg,
+        createdAt: now(),
+      });
+      setSent(true);
+    } catch (e) { alert("Failed to send. Try again."); }
+    setLoading(false);
+  }
+
+  if (sent) return (
+    <Card style={{ textAlign: "center", padding: 48 }}>
+      <div style={{ fontSize: 48, marginBottom: 16 }}>✅</div>
+      <div style={{ fontFamily: C.display, fontSize: 20, fontWeight: 700, marginBottom: 8 }}>Feedback received!</div>
+      <p style={{ color: C.muted, fontSize: 14, marginBottom: 24 }}>Thank you. We'll use this to improve BizOS.</p>
+      <Btn onClick={() => { setMsg(""); setSent(false); }}>Send More Feedback</Btn>
+    </Card>
+  );
+
+  return (
+    <Card>
+      <Select label="Type of feedback" value={type} onChange={setType} options={[
+        { value: "bug", label: "🐛 Something is broken" },
+        { value: "feature", label: "✨ I want a new feature" },
+        { value: "improvement", label: "🔧 Something could be better" },
+        { value: "other", label: "💬 Other" },
+      ]} />
+      <div style={{ marginBottom: 16 }}>
+        <div style={{ fontSize: 12, fontWeight: 600, color: C.muted, marginBottom: 6 }}>Your feedback</div>
+        <textarea value={msg} onChange={e => setMsg(e.target.value)} placeholder="Describe the bug, feature or improvement..." rows={5}
+          style={{ width: "100%", boxSizing: "border-box", border: `1.5px solid ${C.border}`, borderRadius: 10, padding: "10px 14px", fontFamily: C.font, fontSize: 14, color: C.text, background: C.bg, outline: "none", resize: "vertical" }}
+          onFocus={e => e.target.style.borderColor = C.accent}
+          onBlur={e => e.target.style.borderColor = C.border} />
+      </div>
+      <Btn full onClick={send} disabled={loading}>
+        {loading ? "Sending..." : "Send Feedback →"}
+      </Btn>
+    </Card>
+  );
+}PP SHELL
 // ══════════════════════════════════════════════════════
 function AppShell({ user: initialUser, onLogout }) {
   const [user, setUser] = useState(initialUser);
@@ -1229,6 +1282,15 @@ function AppShell({ user: initialUser, onLogout }) {
         {nav === "expenses" && <Expenses expenses={expenses} setExpenses={setExpenses} user={user} />}
  {nav === "ai" && <AIBrain user={user} products={products} sales={sales} customers={customers} expenses={expenses} />}
 {nav === "feedback" && (
+  <div style={{ maxWidth: 560, margin: "0 auto", padding: "40px 24px", fontFamily: C.font }}>
+    <div style={{ textAlign: "center", marginBottom: 32 }}>
+      <div style={{ fontSize: 48, marginBottom: 16 }}>💬</div>
+      <div style={{ fontFamily: C.display, fontSize: 24, fontWeight: 900, marginBottom: 8 }}>Send Feedback</div>
+      <p style={{ color: C.muted, fontSize: 14 }}>Tell us what's broken, what you love, or what you want added.</p>
+    </div>
+    <FeedbackForm user={user} />
+  </div>
+)}
   <div style={{ textAlign: "center", padding: "80px 24px", fontFamily: C.font }}>
     <div style={{ fontSize: 48, marginBottom: 16 }}>💬</div>
     <div style={{ fontFamily: C.display, fontSize: 24, fontWeight: 900, marginBottom: 8 }}>Send Feedback</div>
