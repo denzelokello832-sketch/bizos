@@ -656,7 +656,7 @@ function Dashboard({ user, products, sales, customers, expenses, onNav }) {
         </Card>
         <Card>
           <div style={{ fontFamily: C.display, fontWeight: 700, fontSize: 16, marginBottom: 14 }}>Quick Actions</div>
-          {[{ label: "📦 Add Product", nav: "inventory" }, { label: "💰 Record Sale", nav: "sales" }, { label: "👥 New Customer", nav: "customers" }, { label: "🧠 Ask AI", nav: "ai" }].map(a => (
+          {[{ label: "📦 Add Product", nav: "inventory" }, { label: "💰 Record Sale", nav: "sales" }, { label: "👥 New Customer", nav: "customers" }, { label: "🧠 Ask AI", nav: "ai" }, { label: "💬 Feedback", nav: "feedback" }].map(a => (
             <button key={a.nav} onClick={() => onNav(a.nav)} style={{ width: "100%", background: C.faint, border: `1px solid ${C.border}`, borderRadius: 8, padding: "10px 14px", marginBottom: 8, fontFamily: C.font, fontSize: 13, fontWeight: 600, color: C.text, cursor: "pointer", textAlign: "left" }}>
               {a.label}
             </button>
@@ -1227,7 +1227,18 @@ function AppShell({ user: initialUser, onLogout }) {
         {nav === "sales" && <Sales sales={sales} setSales={setSales} products={products} setProducts={setProducts} customers={customers} user={user} />}
         {nav === "customers" && <Customers customers={customers} setCustomers={setCustomers} sales={sales} user={user} isPro={user.isPro} />}
         {nav === "expenses" && <Expenses expenses={expenses} setExpenses={setExpenses} user={user} />}
-        {nav === "ai" && <AIBrain user={user} products={products} sales={sales} customers={customers} expenses={expenses} />}
+ {nav === "ai" && <AIBrain user={user} products={products} sales={sales} customers={customers} expenses={expenses} />}
+{nav === "feedback" && (
+  <div style={{ textAlign: "center", padding: "80px 24px", fontFamily: C.font }}>
+    <div style={{ fontSize: 48, marginBottom: 16 }}>💬</div>
+    <div style={{ fontFamily: C.display, fontSize: 24, fontWeight: 900, marginBottom: 8 }}>Send Feedback</div>
+    <p style={{ color: C.muted, fontSize: 14, marginBottom: 32, maxWidth: 400, margin: "0 auto 32px" }}>Found a bug? Want a new feature? Tell us directly on WhatsApp.</p>
+    <a href="https://wa.me/254780837018?text=BizOS%20Feedback%3A%20" target="_blank" rel="noreferrer"
+      style={{ background: "#25D366", color: "#fff", padding: "14px 32px", borderRadius: 12, fontFamily: C.font, fontWeight: 700, fontSize: 16, textDecoration: "none", display: "inline-block" }}>
+      💬 Open WhatsApp
+    </a>
+  </div>
+)}
       </main>
     </div>
   );
