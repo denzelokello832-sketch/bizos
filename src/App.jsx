@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { initializeApp } from "firebase/app";
-import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "firebase/auth";
+import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged, sendPasswordResetEmail } from "firebase/auth";
 import { getFirestore, doc, setDoc, getDoc, updateDoc, collection, getDocs, query, where } from "firebase/firestore";
 
 // ── FIREBASE CONFIG ───────────────────────────────────────────────────────────
@@ -531,7 +531,18 @@ function Auth({ onAuth }) {
   const [form, setForm] = useState({ name: "", business: "", phone: "", email: "", pass: "", currency: "KSh" });
   const [err, setErr] = useState("");
   const [loading, setLoading] = useState(false);
+  const [showPass, setShowPass] = useState(false);
+  const [resetSent, setResetSent] = useState(false);
   const f = k => v => setForm(p => ({ ...p, [k]: v }));
+
+  async function forgotPassword() {
+    if (!form.email) return setErr("Enter your email first then click Forgot Password.");
+    try {
+      await sendPasswordResetEmail(auth, form.email);
+      setResetSent(true);
+      setErr("");
+    } catch (e) { setErr("Could not send reset email. Check your email address."); }
+  }
 
   async function submit() {
     setErr(""); setLoading(true);
@@ -596,9 +607,26 @@ function Auth({ onAuth }) {
             ]} />
           </>}
           <Input label="Email" value={form.email} onChange={f("email")} placeholder="you@email.com" type="email" required />
-          <Input label="Password" value={form.pass} onChange={f("pass")} placeholder="••••••••" type="password" required />
+          <div style={{ marginBottom: 14 }}>
+            <div style={{ fontSize: 12, fontWeight: 600, color: C.muted, marginBottom: 6 }}>Password <span style={{ color: C.red }}>*</span></div>
+            <div style={{ position: "relative" }}>
+              <input type={showPass ? "text" : "password"} value={form.pass} onChange={e => f("pass")(e.target.value)} placeholder="••••••••"
+                style={{ width: "100%", boxSizing: "border-box", border: `1.5px solid ${C.border}`, borderRadius: 10, padding: "10px 44px 10px 14px", fontFamily: C.font, fontSize: 14, color: C.text, background: C.bg, outline: "none" }}
+                onFocus={e => e.target.style.borderColor = C.accent}
+                onBlur={e => e.target.style.borderColor = C.border} />
+              <button onClick={() => setShowPass(p => !p)} style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", fontSize: 16, color: C.muted }}>
+                {showPass ? "🙈" : "👁️"}
+              </button>
+            </div>
+          </div>
+          {resetSent && <div style={{ color: C.accent, fontSize: 13, marginBottom: 14, background: C.accentLight, padding: "10px 14px", borderRadius: 8 }}>✅ Password reset email sent! Check your inbox.</div>}
           {err && <div style={{ color: C.red, fontSize: 13, marginBottom: 14, background: C.redLight, padding: "10px 14px", borderRadius: 8 }}>{err}</div>}
           <Btn full onClick={submit} size="lg" disabled={loading}>{loading ? "Please wait..." : mode === "signup" ? "Create Account →" : "Login →"}</Btn>
+          {mode === "login" && (
+            <p style={{ textAlign: "center", fontSize: 13, color: C.muted, marginTop: 12 }}>
+              <span style={{ color: C.accent, cursor: "pointer", fontWeight: 600 }} onClick={forgotPassword}>Forgot Password?</span>
+            </p>
+          )}
           <p style={{ textAlign: "center", fontSize: 13, color: C.muted, marginTop: 16 }}>
             {mode === "signup" ? "Already have an account? " : "No account? "}
             <span style={{ color: C.accent, cursor: "pointer", fontWeight: 600 }} onClick={() => { setMode(m => m === "signup" ? "login" : "signup"); setErr(""); }}>
