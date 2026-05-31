@@ -711,6 +711,7 @@ function Dashboard({ user, products, sales, customers, expenses, onNav }) {
 // ══════════════════════════════════════════════════════
 function Inventory({ products, setProducts, user, isPro }) {
   const [showAdd, setShowAdd] = useState(false);
+  const [editProduct, setEditProduct] = useState(null);
   const [search, setSearch] = useState("");
   const [form, setForm] = useState({ name: "", category: "", buyPrice: "", sellPrice: "", qty: "", unit: "pcs", lowStockAlert: "5" });
   const f = k => v => setForm(p => ({ ...p, [k]: v }));
@@ -722,6 +723,18 @@ function Inventory({ products, setProducts, user, isPro }) {
     setProducts(prev => [...prev, { ...form, id: uid(), sellPrice: Number(form.sellPrice), buyPrice: Number(form.buyPrice || 0), qty: Number(form.qty), lowStockAlert: Number(form.lowStockAlert || 5), createdAt: today() }]);
     setForm({ name: "", category: "", buyPrice: "", sellPrice: "", qty: "", unit: "pcs", lowStockAlert: "5" });
     setShowAdd(false);
+  }
+
+  function openEdit(p) {
+    setEditProduct(p);
+    setForm({ name: p.name, category: p.category || "", buyPrice: String(p.buyPrice || ""), sellPrice: String(p.sellPrice), qty: String(p.qty), unit: p.unit || "pcs", lowStockAlert: String(p.lowStockAlert || 5) });
+  }
+
+  function saveEdit() {
+    if (!form.name || !form.sellPrice) return alert("Fill required fields.");
+    setProducts(prev => prev.map(p => p.id === editProduct.id ? { ...p, ...form, sellPrice: Number(form.sellPrice), buyPrice: Number(form.buyPrice || 0), qty: Number(form.qty), lowStockAlert: Number(form.lowStockAlert || 5) } : p));
+    setEditProduct(null);
+    setForm({ name: "", category: "", buyPrice: "", sellPrice: "", qty: "", unit: "pcs", lowStockAlert: "5" });
   }
 
   const filtered = products.filter(p => p.name?.toLowerCase().includes(search.toLowerCase()));
@@ -736,14 +749,16 @@ function Inventory({ products, setProducts, user, isPro }) {
         {canAdd ? <Btn onClick={() => setShowAdd(true)}>+ Add Product</Btn> : <Badge color={C.gold}>Upgrade for unlimited</Badge>}
       </div>
       <Input value={search} onChange={setSearch} placeholder="🔍 Search products..." />
+
+      {/* Add modal */}
       {showAdd && (
         <Modal title="Add Product" onClose={() => setShowAdd(false)}>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-            <div style={{ gridColumn: "1 / -1" }}><Input label="Product Name *" value={form.name} onChange={f("name")} placeholder="Indomie Noodles" /></div>
-            <Input label="Category" value={form.category} onChange={f("category")} placeholder="Food..." />
+            <div style={{ gridColumn: "1 / -1" }}><Input label="Product Name *" value={form.name} onChange={f("name")} placeholder="Tusker Beer" /></div>
+            <Input label="Category" value={form.category} onChange={f("category")} placeholder="Drinks..." />
             <Select label="Unit" value={form.unit} onChange={f("unit")} options={[{ value: "pcs", label: "Pieces" }, { value: "kg", label: "Kilograms" }, { value: "litres", label: "Litres" }, { value: "bags", label: "Bags" }, { value: "cartons", label: "Cartons" }]} />
-            <Input label={`Buy Price (${curr})`} value={form.buyPrice} onChange={f("buyPrice")} placeholder="500" type="number" />
-            <Input label={`Sell Price (${curr}) *`} value={form.sellPrice} onChange={f("sellPrice")} placeholder="700" type="number" />
+            <Input label={`Buy Price (${curr})`} value={form.buyPrice} onChange={f("buyPrice")} placeholder="200" type="number" />
+            <Input label={`Sell Price (${curr}) *`} value={form.sellPrice} onChange={f("sellPrice")} placeholder="250" type="number" />
             <Input label="Stock Qty *" value={form.qty} onChange={f("qty")} placeholder="100" type="number" />
             <Input label="Low Stock Alert" value={form.lowStockAlert} onChange={f("lowStockAlert")} placeholder="5" type="number" />
           </div>
@@ -753,6 +768,26 @@ function Inventory({ products, setProducts, user, isPro }) {
           </div>
         </Modal>
       )}
+
+      {/* Edit modal */}
+      {editProduct && (
+        <Modal title={`Edit — ${editProduct.name}`} onClose={() => setEditProduct(null)}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <div style={{ gridColumn: "1 / -1" }}><Input label="Product Name *" value={form.name} onChange={f("name")} placeholder="Tusker Beer" /></div>
+            <Input label="Category" value={form.category} onChange={f("category")} placeholder="Drinks..." />
+            <Select label="Unit" value={form.unit} onChange={f("unit")} options={[{ value: "pcs", label: "Pieces" }, { value: "kg", label: "Kilograms" }, { value: "litres", label: "Litres" }, { value: "bags", label: "Bags" }, { value: "cartons", label: "Cartons" }]} />
+            <Input label={`Buy Price (${curr})`} value={form.buyPrice} onChange={f("buyPrice")} placeholder="200" type="number" />
+            <Input label={`Sell Price (${curr}) *`} value={form.sellPrice} onChange={f("sellPrice")} placeholder="250" type="number" />
+            <Input label="Current Stock" value={form.qty} onChange={f("qty")} placeholder="100" type="number" />
+            <Input label="Low Stock Alert" value={form.lowStockAlert} onChange={f("lowStockAlert")} placeholder="5" type="number" />
+          </div>
+          <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
+            <Btn onClick={saveEdit}>Save Changes</Btn>
+            <Btn variant="ghost" onClick={() => setEditProduct(null)}>Cancel</Btn>
+          </div>
+        </Modal>
+      )}
+
       {filtered.length === 0
         ? <EmptyState icon="📦" title="No products yet" desc="Add your first product." action="+ Add Product" onAction={() => setShowAdd(true)} />
         : (
@@ -760,7 +795,7 @@ function Inventory({ products, setProducts, user, isPro }) {
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, fontFamily: C.font }}>
               <thead>
                 <tr style={{ background: C.faint, borderBottom: `1px solid ${C.border}` }}>
-                  {["Product", "Category", "Sell Price", "Stock", "Status", ""].map(h => (
+                  {["Product", "Category", "Buy Price", "Sell Price", "Stock", "Status", ""].map(h => (
                     <th key={h} style={{ padding: "12px 16px", textAlign: "left", fontSize: 11, fontWeight: 700, color: C.muted, textTransform: "uppercase" }}>{h}</th>
                   ))}
                 </tr>
@@ -772,11 +807,13 @@ function Inventory({ products, setProducts, user, isPro }) {
                     <tr key={p.id} style={{ borderBottom: `1px solid ${C.faint}`, background: i % 2 === 0 ? C.surface : C.bg }}>
                       <td style={{ padding: "12px 16px", fontWeight: 600 }}>{p.name}</td>
                       <td style={{ padding: "12px 16px", color: C.muted }}>{p.category || "—"}</td>
+                      <td style={{ padding: "12px 16px", fontFamily: C.mono }}>{p.buyPrice ? fmt(p.buyPrice, curr) : "—"}</td>
                       <td style={{ padding: "12px 16px", fontFamily: C.mono, color: C.accent, fontWeight: 700 }}>{fmt(p.sellPrice, curr)}</td>
                       <td style={{ padding: "12px 16px", fontFamily: C.mono }}>{p.qty} {p.unit}</td>
                       <td style={{ padding: "12px 16px" }}><Badge color={isLow ? C.red : C.accentBright}>{isLow ? "LOW" : "OK"}</Badge></td>
                       <td style={{ padding: "12px 16px" }}>
                         <div style={{ display: "flex", gap: 6 }}>
+                          <Btn size="sm" variant="secondary" onClick={() => openEdit(p)}>✏️ Edit</Btn>
                           <Btn size="sm" variant="secondary" onClick={() => { const q = Number(prompt("Units to add?")); if (q) setProducts(prev => prev.map(x => x.id === p.id ? { ...x, qty: x.qty + q } : x)); }}>+Stock</Btn>
                           <Btn size="sm" variant="danger" onClick={() => { if (window.confirm("Remove?")) setProducts(prev => prev.filter(x => x.id !== p.id)); }}>✕</Btn>
                         </div>
