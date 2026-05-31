@@ -791,39 +791,41 @@ function Inventory({ products, setProducts, user, isPro }) {
       {filtered.length === 0
         ? <EmptyState icon="📦" title="No products yet" desc="Add your first product." action="+ Add Product" onAction={() => setShowAdd(true)} />
         : (
-          <Card style={{ padding: 0, overflow: "hidden" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, fontFamily: C.font }}>
-              <thead>
-                <tr style={{ background: C.faint, borderBottom: `1px solid ${C.border}` }}>
-                  {["Product", "Category", "Buy Price", "Sell Price", "Stock", "Status", ""].map(h => (
-                    <th key={h} style={{ padding: "12px 16px", textAlign: "left", fontSize: 11, fontWeight: 700, color: C.muted, textTransform: "uppercase" }}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map((p, i) => {
-                  const isLow = p.qty <= (p.lowStockAlert || 5);
-                  return (
-                    <tr key={p.id} style={{ borderBottom: `1px solid ${C.faint}`, background: i % 2 === 0 ? C.surface : C.bg }}>
-                      <td style={{ padding: "12px 16px", fontWeight: 600 }}>{p.name}</td>
-                      <td style={{ padding: "12px 16px", color: C.muted }}>{p.category || "—"}</td>
-                      <td style={{ padding: "12px 16px", fontFamily: C.mono }}>{p.buyPrice ? fmt(p.buyPrice, curr) : "—"}</td>
-                      <td style={{ padding: "12px 16px", fontFamily: C.mono, color: C.accent, fontWeight: 700 }}>{fmt(p.sellPrice, curr)}</td>
-                      <td style={{ padding: "12px 16px", fontFamily: C.mono }}>{p.qty} {p.unit}</td>
-                      <td style={{ padding: "12px 16px" }}><Badge color={isLow ? C.red : C.accentBright}>{isLow ? "LOW" : "OK"}</Badge></td>
-                      <td style={{ padding: "12px 16px" }}>
-                        <div style={{ display: "flex", gap: 6 }}>
-                          <Btn size="sm" variant="secondary" onClick={() => openEdit(p)}>✏️ Edit</Btn>
-                          <Btn size="sm" variant="secondary" onClick={() => { const q = Number(prompt("Units to add?")); if (q) setProducts(prev => prev.map(x => x.id === p.id ? { ...x, qty: x.qty + q } : x)); }}>+Stock</Btn>
-                          <Btn size="sm" variant="danger" onClick={() => { if (window.confirm("Remove?")) setProducts(prev => prev.filter(x => x.id !== p.id)); }}>✕</Btn>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </Card>
+          <div style={{ display: "grid", gap: 12 }}>
+            {filtered.map((p) => {
+              const isLow = p.qty <= (p.lowStockAlert || 5);
+              return (
+                <Card key={p.id}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4 }}>{p.name}</div>
+                      {p.category && <div style={{ fontSize: 12, color: C.muted }}>{p.category}</div>}
+                    </div>
+                    <Badge color={isLow ? C.red : C.accentBright}>{isLow ? "LOW STOCK" : "IN STOCK"}</Badge>
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginBottom: 14 }}>
+                    <div style={{ background: C.faint, borderRadius: 8, padding: "8px 10px" }}>
+                      <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", fontWeight: 700, marginBottom: 3 }}>Buy</div>
+                      <div style={{ fontFamily: C.mono, fontSize: 13, fontWeight: 700 }}>{p.buyPrice ? fmt(p.buyPrice, curr) : "—"}</div>
+                    </div>
+                    <div style={{ background: C.accentLight, borderRadius: 8, padding: "8px 10px" }}>
+                      <div style={{ fontSize: 10, color: C.accent, textTransform: "uppercase", fontWeight: 700, marginBottom: 3 }}>Sell</div>
+                      <div style={{ fontFamily: C.mono, fontSize: 13, fontWeight: 700, color: C.accent }}>{fmt(p.sellPrice, curr)}</div>
+                    </div>
+                    <div style={{ background: C.faint, borderRadius: 8, padding: "8px 10px" }}>
+                      <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", fontWeight: 700, marginBottom: 3 }}>Stock</div>
+                      <div style={{ fontFamily: C.mono, fontSize: 13, fontWeight: 700 }}>{p.qty} {p.unit}</div>
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <Btn size="sm" variant="secondary" style={{ flex: 1, justifyContent: "center" }} onClick={() => openEdit(p)}>✏️ Edit</Btn>
+                    <Btn size="sm" variant="secondary" style={{ flex: 1, justifyContent: "center" }} onClick={() => { const q = Number(prompt("Units to add?")); if (q) setProducts(prev => prev.map(x => x.id === p.id ? { ...x, qty: x.qty + q } : x)); }}>+ Stock</Btn>
+                    <Btn size="sm" variant="danger" onClick={() => { if (window.confirm("Remove this product?")) setProducts(prev => prev.filter(x => x.id !== p.id)); }}>✕</Btn>
+                  </div>
+                </Card>
+              );
+            })}
+          </div>
         )}
     </div>
   );
