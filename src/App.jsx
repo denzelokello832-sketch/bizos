@@ -1261,18 +1261,26 @@ function FeedbackForm({ user }) {
 }
 
 // ══════════════════════════════════════════════════════
-// APP SHELL
+// APP SHELL — RESPONSIVE MOBILE + DESKTOP
 // ══════════════════════════════════════════════════════
 function AppShell({ user: initialUser, onLogout }) {
   const [user, setUser] = useState(initialUser);
   const [nav, setNav] = useState("dashboard");
   const [showUpgrade, setShowUpgrade] = useState(false);
+  const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   const [products, setProductsState] = useState([]);
   const [sales, setSalesState] = useState([]);
   const [customers, setCustomersState] = useState([]);
   const [expenses, setExpensesState] = useState([]);
   const userId = user.id;
+
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
 
   useEffect(() => {
     async function loadData() {
@@ -1298,14 +1306,24 @@ function AppShell({ user: initialUser, onLogout }) {
 
   async function upgrade() {
     await setUserPro(userId, true);
-    await markReferralPaid(userId); // Pay affiliate if user was referred
+    await markReferralPaid(userId);
     setUser(u => ({ ...u, isPro: true }));
     setShowUpgrade(false);
   }
 
   if (loading) return <Loader text="Loading your business data..." />;
 
-  const NAV = [
+  // Bottom nav for mobile (5 most important items)
+  const MOBILE_NAV = [
+    { id: "dashboard", label: "Home", icon: "◈" },
+    { id: "inventory", label: "Stock", icon: "📦" },
+    { id: "sales", label: "Sales", icon: "💰" },
+    { id: "customers", label: "Customers", icon: "👥" },
+    { id: "more", label: "More", icon: "☰" },
+  ];
+
+  // Full nav for desktop sidebar
+  const DESKTOP_NAV = [
     { id: "dashboard", label: "Dashboard", icon: "◈" },
     { id: "inventory", label: "Inventory", icon: "📦" },
     { id: "sales", label: "Sales", icon: "💰" },
@@ -1315,6 +1333,84 @@ function AppShell({ user: initialUser, onLogout }) {
     { id: "feedback", label: "Feedback", icon: "💬" },
   ];
 
+  const PageContent = () => (
+    <>
+      {nav === "dashboard" && <Dashboard user={user} products={products} sales={sales} customers={customers} expenses={expenses} onNav={setNav} />}
+      {nav === "inventory" && <Inventory products={products} setProducts={setProducts} user={user} isPro={user.isPro} />}
+      {nav === "sales" && <Sales sales={sales} setSales={setSales} products={products} setProducts={setProducts} customers={customers} user={user} />}
+      {nav === "customers" && <Customers customers={customers} setCustomers={setCustomers} sales={sales} user={user} isPro={user.isPro} />}
+      {nav === "expenses" && <Expenses expenses={expenses} setExpenses={setExpenses} user={user} />}
+      {nav === "ai" && <AIBrain user={user} products={products} sales={sales} customers={customers} expenses={expenses} />}
+      {nav === "feedback" && <FeedbackForm user={user} />}
+    </>
+  );
+
+  // ── MOBILE LAYOUT ──────────────────────────────────
+  if (isMobile) return (
+    <div style={{ minHeight: "100vh", background: C.bg, fontFamily: C.font, paddingBottom: 70 }}>
+      <Fonts />
+      {showUpgrade && <UpgradeModal user={user} onUpgrade={upgrade} onClose={() => setShowUpgrade(false)} />}
+
+      {/* Mobile top bar */}
+      <div style={{ background: C.surface, borderBottom: `1px solid ${C.border}`, padding: "14px 16px", display: "flex", justifyContent: "space-between", alignItems: "center", position: "sticky", top: 0, zIndex: 100 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <div style={{ width: 28, height: 28, background: C.accent, borderRadius: 7, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14 }}>🌍</div>
+          <div style={{ fontFamily: C.display, fontSize: 16, fontWeight: 900, color: C.accent }}>BizOS</div>
+        </div>
+        <div style={{ textAlign: "right" }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: C.text }}>{user.business}</div>
+          {user.isPro && <Badge color={C.accent}>✦ PRO</Badge>}
+        </div>
+      </div>
+
+      {/* Mobile slide-down menu for "More" */}
+      {showMobileMenu && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 200 }} onClick={() => setShowMobileMenu(false)}>
+          <div style={{ position: "absolute", bottom: 70, left: 0, right: 0, background: C.surface, borderRadius: "20px 20px 0 0", padding: 24 }} onClick={e => e.stopPropagation()}>
+            <div style={{ fontFamily: C.display, fontWeight: 700, fontSize: 16, marginBottom: 16, color: C.muted }}>More options</div>
+            {[{ id: "expenses", label: "Expenses", icon: "💸" }, { id: "ai", label: "AI Advisor", icon: "🧠" }, { id: "feedback", label: "Feedback", icon: "💬" }].map(n => (
+              <button key={n.id} onClick={() => { setNav(n.id); setShowMobileMenu(false); }}
+                style={{ width: "100%", display: "flex", alignItems: "center", gap: 14, padding: "14px 12px", border: "none", borderRadius: 10, cursor: "pointer", fontFamily: C.font, fontWeight: 600, fontSize: 15, marginBottom: 4, background: nav === n.id ? C.accentLight : C.faint, color: nav === n.id ? C.accent : C.text }}>
+                <span style={{ fontSize: 20 }}>{n.icon}</span> {n.label}
+              </button>
+            ))}
+            {!user.isPro && (
+              <button onClick={() => { setShowUpgrade(true); setShowMobileMenu(false); }}
+                style={{ width: "100%", background: C.gold, border: "none", borderRadius: 10, padding: "14px", color: "#fff", fontFamily: C.font, fontWeight: 700, fontSize: 15, cursor: "pointer", marginTop: 8 }}>
+                ⚡ Upgrade — KSh 1,500/mo
+              </button>
+            )}
+            <button onClick={async () => { await signOut(auth); onLogout(); }}
+              style={{ width: "100%", background: "transparent", border: `1px solid ${C.border}`, borderRadius: 10, padding: "12px", color: C.muted, fontFamily: C.font, fontSize: 14, cursor: "pointer", marginTop: 8 }}>
+              Logout
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Page content */}
+      <div style={{ padding: "16px" }}>
+        <PageContent />
+      </div>
+
+      {/* Bottom navigation bar */}
+      <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: C.surface, borderTop: `1px solid ${C.border}`, display: "flex", zIndex: 100 }}>
+        {MOBILE_NAV.map(n => {
+          const isActive = n.id === "more" ? ["expenses", "ai", "feedback"].includes(nav) : nav === n.id;
+          return (
+            <button key={n.id} onClick={() => n.id === "more" ? setShowMobileMenu(true) : setNav(n.id)}
+              style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "10px 4px", border: "none", background: "transparent", cursor: "pointer", gap: 3 }}>
+              <span style={{ fontSize: 20 }}>{n.icon}</span>
+              <span style={{ fontSize: 10, fontFamily: C.font, fontWeight: isActive ? 700 : 500, color: isActive ? C.accent : C.muted }}>{n.label}</span>
+              {isActive && <div style={{ width: 4, height: 4, borderRadius: "50%", background: C.accent }} />}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+
+  // ── DESKTOP LAYOUT ─────────────────────────────────
   return (
     <div style={{ minHeight: "100vh", background: C.bg, display: "flex", fontFamily: C.font }}>
       <Fonts />
@@ -1330,7 +1426,7 @@ function AppShell({ user: initialUser, onLogout }) {
           {user.isPro && <Badge color={C.accent} style={{ marginTop: 8, display: "inline-flex" }}>✦ BUSINESS</Badge>}
         </div>
         <nav style={{ flex: 1, padding: "12px 10px", overflowY: "auto" }}>
-          {NAV.map(n => (
+          {DESKTOP_NAV.map(n => (
             <button key={n.id} onClick={() => setNav(n.id)} style={{ width: "100%", display: "flex", alignItems: "center", gap: 12, padding: "11px 12px", border: "none", borderRadius: 10, cursor: "pointer", fontFamily: C.font, fontWeight: 600, fontSize: 14, marginBottom: 2, background: nav === n.id ? C.accentLight : "transparent", color: nav === n.id ? C.accent : C.muted }}>
               <span>{n.icon}</span> {n.label}
             </button>
@@ -1348,13 +1444,7 @@ function AppShell({ user: initialUser, onLogout }) {
         </div>
       </div>
       <main style={{ flex: 1, marginLeft: 230, padding: "36px 32px", maxWidth: "calc(100% - 230px)", boxSizing: "border-box" }}>
-        {nav === "dashboard" && <Dashboard user={user} products={products} sales={sales} customers={customers} expenses={expenses} onNav={setNav} />}
-        {nav === "inventory" && <Inventory products={products} setProducts={setProducts} user={user} isPro={user.isPro} />}
-        {nav === "sales" && <Sales sales={sales} setSales={setSales} products={products} setProducts={setProducts} customers={customers} user={user} />}
-        {nav === "customers" && <Customers customers={customers} setCustomers={setCustomers} sales={sales} user={user} isPro={user.isPro} />}
-        {nav === "expenses" && <Expenses expenses={expenses} setExpenses={setExpenses} user={user} />}
-        {nav === "ai" && <AIBrain user={user} products={products} sales={sales} customers={customers} expenses={expenses} />}
-        {nav === "feedback" && <FeedbackForm user={user} />}
+        <PageContent />
       </main>
     </div>
   );
