@@ -476,15 +476,15 @@ function Landing({ onStart, onAffiliate }) {
       <Fonts />
       <script src="https://js.paystack.co/v1/inline.js" />
       <div style={{ position: "fixed", inset: 0, background: "radial-gradient(ellipse 80% 50% at 50% 0%, rgba(34,197,94,0.1) 0%, transparent 70%)", pointerEvents: "none" }} />
-      <nav style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "24px 48px", position: "relative", zIndex: 10 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <div style={{ width: 36, height: 36, background: C.accent, borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>🌍</div>
-          <div style={{ fontFamily: C.display, fontSize: 22, fontWeight: 900 }}>BizOS</div>
+      <nav style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "16px 20px", position: "relative", zIndex: 10 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <div style={{ width: 32, height: 32, background: C.accent, borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16 }}>🌍</div>
+          <div style={{ fontFamily: C.display, fontSize: 20, fontWeight: 900 }}>BizOS</div>
         </div>
-        <div style={{ display: "flex", gap: 12 }}>
-          <Btn variant="ghost" onClick={onAffiliate} style={{ color: C.accentBright, borderColor: `${C.accentBright}40` }}>💰 Earn Money</Btn>
-          <Btn variant="ghost" onClick={onStart} style={{ color: "#fff", borderColor: "rgba(255,255,255,0.2)" }}>Login</Btn>
-          <Btn onClick={onStart} style={{ background: C.accentBright, color: "#000" }}>Start Free</Btn>
+        <div style={{ display: "flex", gap: 8 }}>
+          <Btn variant="ghost" onClick={onAffiliate} size="sm" style={{ color: C.accentBright, borderColor: `${C.accentBright}40` }}>💰 Earn</Btn>
+          <Btn variant="ghost" onClick={onStart} size="sm" style={{ color: "#fff", borderColor: "rgba(255,255,255,0.2)" }}>Login</Btn>
+          <Btn onClick={onStart} size="sm" style={{ background: C.accentBright, color: "#000" }}>Start Free</Btn>
         </div>
       </nav>
       <div style={{ textAlign: "center", padding: "70px 24px 80px", maxWidth: 820, margin: "0 auto", position: "relative", zIndex: 10 }}>
