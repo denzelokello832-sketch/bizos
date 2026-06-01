@@ -737,7 +737,12 @@ function Inventory({ products, setProducts, user, isPro }) {
     setForm({ name: "", category: "", buyPrice: "", sellPrice: "", qty: "", unit: "pcs", lowStockAlert: "5" });
   }
 
-  const filtered = products.filter(p => p.name?.toLowerCase().includes(search.toLowerCase()));
+  const [showLowOnly, setShowLowOnly] = useState(false);
+  const filtered = products.filter(p => {
+    const matchSearch = p.name?.toLowerCase().includes(search.toLowerCase());
+    const matchLow = showLowOnly ? p.qty <= (p.lowStockAlert || 5) : true;
+    return matchSearch && matchLow;
+  });
 
   return (
     <div>
@@ -749,6 +754,16 @@ function Inventory({ products, setProducts, user, isPro }) {
         {canAdd ? <Btn onClick={() => setShowAdd(true)}>+ Add Product</Btn> : <Badge color={C.gold}>Upgrade for unlimited</Badge>}
       </div>
       <Input value={search} onChange={setSearch} placeholder="🔍 Search products..." />
+      <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+        <button onClick={() => setShowLowOnly(false)}
+          style={{ border: `1px solid ${!showLowOnly ? C.accent : C.border}`, background: !showLowOnly ? C.accentLight : "transparent", color: !showLowOnly ? C.accent : C.muted, borderRadius: 8, padding: "7px 16px", fontSize: 12, cursor: "pointer", fontFamily: C.mono, fontWeight: !showLowOnly ? 700 : 400 }}>
+          All Products ({products.length})
+        </button>
+        <button onClick={() => setShowLowOnly(true)}
+          style={{ border: `1px solid ${showLowOnly ? C.red : C.border}`, background: showLowOnly ? C.redLight : "transparent", color: showLowOnly ? C.red : C.muted, borderRadius: 8, padding: "7px 16px", fontSize: 12, cursor: "pointer", fontFamily: C.mono, fontWeight: showLowOnly ? 700 : 400 }}>
+          ⚠ Low Stock ({products.filter(p => p.qty <= (p.lowStockAlert || 5)).length})
+        </button>
+      </div>
 
       {/* Add modal */}
       {showAdd && (
