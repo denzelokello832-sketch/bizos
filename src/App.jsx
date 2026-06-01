@@ -1106,12 +1106,34 @@ function Expenses({ expenses, setExpenses, user }) {
 // ══════════════════════════════════════════════════════
 // AI BRAIN
 // ══════════════════════════════════════════════════════
-function AIBrain({ user, products, sales, customers, expenses }) {
+function AIBrain({ user, products, sales, customers, expenses, onUpgrade }) {
   const [msgs, setMsgs] = useState([{ role: "ai", text: `Hello ${user.name?.split(" ")[0]}! I'm your BizOS AI advisor. I know everything about ${user.business}. Ask me anything.` }]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const bottomRef = useRef();
   const curr = user.currency || "KSh";
+
+  // Lock AI behind Pro plan
+  if (!user.isPro) return (
+    <div style={{ textAlign: "center", padding: "60px 24px", fontFamily: C.font }}>
+      <div style={{ fontSize: 56, marginBottom: 16 }}>🧠</div>
+      <div style={{ fontFamily: C.display, fontSize: 24, fontWeight: 900, marginBottom: 12 }}>AI Business Advisor</div>
+      <p style={{ color: C.muted, fontSize: 15, maxWidth: 400, margin: "0 auto 20px", lineHeight: 1.7 }}>
+        Get instant answers about your business. Ask anything and your AI advisor will tell you exactly what's working and what's not.
+      </p>
+      <div style={{ background: C.accentLight, border: `1px solid ${C.accent}30`, borderRadius: 16, padding: 20, maxWidth: 400, margin: "0 auto 20px", textAlign: "left" }}>
+        {["💬 'What's my best selling product?'", "📈 'How much profit this month?'", "⚠️ 'Which products are running low?'", "👥 'Who is my best customer?'", "📅 'What day do I sell the most?'"].map(q => (
+          <div key={q} style={{ fontSize: 14, color: C.accent, padding: "5px 0", fontWeight: 500 }}>{q}</div>
+        ))}
+      </div>
+      <div style={{ background: C.goldLight, border: `1px solid ${C.gold}30`, borderRadius: 12, padding: 14, maxWidth: 400, margin: "0 auto 24px", fontSize: 14, color: C.gold, fontWeight: 600 }}>
+        🔒 AI Advisor is a Business plan feature — KSh 1,500/month
+      </div>
+      <Btn size="lg" onClick={onUpgrade} style={{ background: C.gold, color: "#fff" }}>
+        ⚡ Upgrade to unlock AI →
+      </Btn>
+    </div>
+  );
 
   const PROMPTS = ["What's my best selling product?", "How much profit this month?", "Which customer buys most?", "What's running low?", "What day do I sell most?"];
 
@@ -1357,7 +1379,7 @@ function AppShell({ user: initialUser, onLogout }) {
       {nav === "sales" && <Sales sales={sales} setSales={setSales} products={products} setProducts={setProducts} customers={customers} user={user} />}
       {nav === "customers" && <Customers customers={customers} setCustomers={setCustomers} sales={sales} user={user} isPro={user.isPro} />}
       {nav === "expenses" && <Expenses expenses={expenses} setExpenses={setExpenses} user={user} />}
-      {nav === "ai" && <AIBrain user={user} products={products} sales={sales} customers={customers} expenses={expenses} />}
+      {nav === "ai" && <AIBrain user={user} products={products} sales={sales} customers={customers} expenses={expenses} onUpgrade={() => setShowUpgrade(true)} />}
       {nav === "feedback" && <FeedbackForm user={user} />}
     </>
   );
