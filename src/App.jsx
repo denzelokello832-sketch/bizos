@@ -14,6 +14,13 @@ const firebaseConfig = {
 };
 
 const app = initializeApp(firebaseConfig);
+
+// Load Paystack script globally
+if (!document.querySelector('script[src="https://js.paystack.co/v1/inline.js"]')) {
+  const script = document.createElement('script');
+  script.src = 'https://js.paystack.co/v1/inline.js';
+  document.head.appendChild(script);
+}
 const auth = getAuth(app);
 const db = getFirestore(app);
 
