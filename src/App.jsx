@@ -14,13 +14,6 @@ const firebaseConfig = {
 };
 
 const app = initializeApp(firebaseConfig);
-
-// Load Paystack script globally
-if (!document.querySelector('script[src="https://js.paystack.co/v1/inline.js"]')) {
-  const script = document.createElement('script');
-  script.src = 'https://js.paystack.co/v1/inline.js';
-  document.head.appendChild(script);
-}
 const auth = getAuth(app);
 const db = getFirestore(app);
 
@@ -73,6 +66,35 @@ async function getUserProfile(userId) {
     const snap = await getDoc(doc(db, "users", userId));
     return snap.exists() ? snap.data() : {};
   } catch (e) { return {}; }
+}
+
+// ── MULTI-SHOP HELPERS ────────────────────────────────────────────────────────
+async function getShops(userId) {
+  try {
+    const snap = await getDoc(doc(db, "users", userId, "meta", "shops"));
+    return snap.exists() ? snap.data().list || [] : [];
+  } catch (e) { return []; }
+}
+
+async function saveShops(userId, shops) {
+  try {
+    await setDoc(doc(db, "users", userId, "meta", "shops"), { list: shops, updatedAt: now() });
+  } catch (e) { console.error("Save shops error:", e); }
+}
+
+async function saveShopData(userId, shopId, key, data) {
+  try {
+    await setDoc(doc(db, "users", userId, "shops", shopId, "data", key), { value: JSON.stringify(data), updatedAt: now() });
+  } catch (e) { console.error("Save shop data error:", e); }
+}
+
+async function getShopData(userId, shopId, key, defaultVal) {
+  try {
+    const snap = await getDoc(doc(db, "users", userId, "shops", shopId, "data", key));
+    if (snap.exists()) return JSON.parse(snap.data().value);
+    // Fallback to old data structure for existing users
+    return await getUserData(userId, key, defaultVal);
+  } catch (e) { return defaultVal; }
 }
 
 // Save affiliate referral
@@ -176,7 +198,7 @@ async function askAI(system, message) {
 // ── PAYSTACK ──────────────────────────────────────────────────────────────────
 function openPaystack(email, amount, onSuccess) {
   const h = window.PaystackPop?.setup({
-    key: "pk_live_8adbcd9efedf8e8fca407a3c154648c36a61e617",
+    key: "pk_test_08c5d5107aa8861893580f4c2b9acc055efb457a",
     email, amount: amount * 100, currency: "KES",
     callback: r => r.status === "success" && onSuccess(r.reference),
     onClose: () => {},
@@ -1307,15 +1329,71 @@ function FeedbackForm({ user }) {
 }
 
 // ══════════════════════════════════════════════════════
-// APP SHELL — RESPONSIVE MOBILE + DESKTOP
+// SHOP MANAGER
 // ══════════════════════════════════════════════════════
+function ShopManager({ user, shops, setShops, onClose }) {
+  const [form, setForm] = useState({ name: "", currency: "KSh" });
+  const f = k => v => setForm(p => ({ ...p, [k]: v }));
+  const canAdd = user.isPro || shops.length < 2;
+
+  function addShop() {
+    if (!form.name) return alert("Enter shop name.");
+    const newShop = { id: uid(), name: form.name, currency: form.currency, createdAt: today() };
+    setShops(prev => [...prev, newShop]);
+    setForm({ name: "", currency: "KSh" });
+  }
+
+  function removeShop(id) {
+    if (shops.length <= 1) return alert("You need at least one shop.");
+    if (window.confirm("Remove this shop? All its data will be deleted.")) {
+      setShops(prev => prev.filter(s => s.id !== id));
+    }
+  }
+
+  return (
+    <Modal title="Manage Shops" onClose={onClose} width={500}>
+      <div style={{ marginBottom: 24 }}>
+        {shops.map((s, i) => (
+          <div key={s.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 0", borderBottom: `1px solid ${C.faint}` }}>
+            <div>
+              <div style={{ fontWeight: 700, fontSize: 15 }}>{s.name}</div>
+              <div style={{ fontSize: 12, color: C.muted }}>{s.currency} · Added {fmtDate(s.createdAt)}</div>
+            </div>
+            {shops.length > 1 && <Btn size="sm" variant="danger" onClick={() => removeShop(s.id)}>Remove</Btn>}
+          </div>
+        ))}
+      </div>
+      {canAdd ? (
+        <div style={{ background: C.faint, borderRadius: 12, padding: 16 }}>
+          <div style={{ fontFamily: C.display, fontWeight: 700, fontSize: 15, marginBottom: 14 }}>Add New Shop</div>
+          <Input label="Shop Name" value={form.name} onChange={f("name")} placeholder="Shop 2 — Westlands" />
+          <Select label="Currency" value={form.currency} onChange={f("currency")} options={[
+            { value: "KSh", label: "KSh — Kenyan Shilling" },
+            { value: "₦", label: "₦ — Nigerian Naira" },
+            { value: "GH₵", label: "GH₵ — Ghanaian Cedi" },
+            { value: "$", label: "$ — US Dollar" },
+          ]} />
+          <Btn onClick={addShop}>+ Add Shop</Btn>
+        </div>
+      ) : (
+        <Card style={{ background: C.goldLight, border: `1px solid ${C.gold}30`, textAlign: "center" }}>
+          <div style={{ fontFamily: C.display, fontWeight: 700, fontSize: 16, marginBottom: 8, color: C.gold }}>Upgrade for more shops</div>
+          <p style={{ color: C.muted, fontSize: 13 }}>Business plan includes up to 5 shops.</p>
+        </Card>
+      )}
+    </Modal>
+  );
+}
 function AppShell({ user: initialUser, onLogout }) {
   const [user, setUser] = useState(initialUser);
   const [nav, setNav] = useState("dashboard");
   const [showUpgrade, setShowUpgrade] = useState(false);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
+  const [showShopManager, setShowShopManager] = useState(false);
   const [loading, setLoading] = useState(true);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+  const [shops, setShopsState] = useState([]);
+  const [activeShopId, setActiveShopId] = useState(null);
   const [products, setProductsState] = useState([]);
   const [sales, setSalesState] = useState([]);
   const [customers, setCustomersState] = useState([]);
@@ -1331,12 +1409,24 @@ function AppShell({ user: initialUser, onLogout }) {
   useEffect(() => {
     async function loadData() {
       setLoading(true);
-      const [p, s, c, e, profile] = await Promise.all([
-        getUserData(userId, "products", []),
-        getUserData(userId, "sales", []),
-        getUserData(userId, "customers", []),
-        getUserData(userId, "expenses", []),
+      const [shopList, profile] = await Promise.all([
+        getShops(userId),
         getUserProfile(userId),
+      ]);
+      let finalShops = shopList;
+      if (!shopList || shopList.length === 0) {
+        const defaultShop = { id: uid(), name: profile.business || "My Shop", currency: profile.currency || "KSh", createdAt: today() };
+        finalShops = [defaultShop];
+        await saveShops(userId, finalShops);
+      }
+      setShopsState(finalShops);
+      const shopId = finalShops[0].id;
+      setActiveShopId(shopId);
+      const [p, s, c, e] = await Promise.all([
+        getUserData(userId, `products_${shopId}`, []),
+        getUserData(userId, `sales_${shopId}`, []),
+        getUserData(userId, `customers_${shopId}`, []),
+        getUserData(userId, `expenses_${shopId}`, []),
       ]);
       setProductsState(p); setSalesState(s); setCustomersState(c); setExpensesState(e);
       if (profile.isPro !== undefined) setUser(u => ({ ...u, isPro: profile.isPro }));
@@ -1345,10 +1435,32 @@ function AppShell({ user: initialUser, onLogout }) {
     loadData();
   }, [userId]);
 
-  const setProducts = (updater) => setProductsState(prev => { const next = typeof updater === "function" ? updater(prev) : updater; saveUserData(userId, "products", next); return next; });
-  const setSales = (updater) => setSalesState(prev => { const next = typeof updater === "function" ? updater(prev) : updater; saveUserData(userId, "sales", next); return next; });
-  const setCustomers = (updater) => setCustomersState(prev => { const next = typeof updater === "function" ? updater(prev) : updater; saveUserData(userId, "customers", next); return next; });
-  const setExpenses = (updater) => setExpensesState(prev => { const next = typeof updater === "function" ? updater(prev) : updater; saveUserData(userId, "expenses", next); return next; });
+  async function switchShop(shopId) {
+    if (shopId === activeShopId) return;
+    setLoading(true);
+    setActiveShopId(shopId);
+    const [p, s, c, e] = await Promise.all([
+      getUserData(userId, `products_${shopId}`, []),
+      getUserData(userId, `sales_${shopId}`, []),
+      getUserData(userId, `customers_${shopId}`, []),
+      getUserData(userId, `expenses_${shopId}`, []),
+    ]);
+    setProductsState(p); setSalesState(s); setCustomersState(c); setExpensesState(e);
+    setLoading(false);
+  }
+
+  const setShops = (updater) => {
+    setShopsState(prev => {
+      const next = typeof updater === "function" ? updater(prev) : updater;
+      saveShops(userId, next);
+      return next;
+    });
+  };
+
+  const setProducts = (updater) => setProductsState(prev => { const next = typeof updater === "function" ? updater(prev) : updater; saveUserData(userId, `products_${activeShopId}`, next); return next; });
+  const setSales = (updater) => setSalesState(prev => { const next = typeof updater === "function" ? updater(prev) : updater; saveUserData(userId, `sales_${activeShopId}`, next); return next; });
+  const setCustomers = (updater) => setCustomersState(prev => { const next = typeof updater === "function" ? updater(prev) : updater; saveUserData(userId, `customers_${activeShopId}`, next); return next; });
+  const setExpenses = (updater) => setExpensesState(prev => { const next = typeof updater === "function" ? updater(prev) : updater; saveUserData(userId, `expenses_${activeShopId}`, next); return next; });
 
   async function upgrade() {
     await setUserPro(userId, true);
@@ -1359,7 +1471,9 @@ function AppShell({ user: initialUser, onLogout }) {
 
   if (loading) return <Loader text="Loading your business data..." />;
 
-  // Bottom nav for mobile (5 most important items)
+  const activeShop = shops.find(s => s.id === activeShopId) || shops[0];
+  const activeUser = { ...user, business: activeShop?.name || user.business, currency: activeShop?.currency || user.currency };
+
   const MOBILE_NAV = [
     { id: "dashboard", label: "Home", icon: "◈" },
     { id: "inventory", label: "Stock", icon: "📦" },
@@ -1368,7 +1482,6 @@ function AppShell({ user: initialUser, onLogout }) {
     { id: "more", label: "More", icon: "☰" },
   ];
 
-  // Full nav for desktop sidebar
   const DESKTOP_NAV = [
     { id: "dashboard", label: "Dashboard", icon: "◈" },
     { id: "inventory", label: "Inventory", icon: "📦" },
@@ -1381,14 +1494,39 @@ function AppShell({ user: initialUser, onLogout }) {
 
   const PageContent = () => (
     <>
-      {nav === "dashboard" && <Dashboard user={user} products={products} sales={sales} customers={customers} expenses={expenses} onNav={setNav} />}
-      {nav === "inventory" && <Inventory products={products} setProducts={setProducts} user={user} isPro={user.isPro} />}
-      {nav === "sales" && <Sales sales={sales} setSales={setSales} products={products} setProducts={setProducts} customers={customers} user={user} />}
-      {nav === "customers" && <Customers customers={customers} setCustomers={setCustomers} sales={sales} user={user} isPro={user.isPro} />}
-      {nav === "expenses" && <Expenses expenses={expenses} setExpenses={setExpenses} user={user} />}
-      {nav === "ai" && <AIBrain user={user} products={products} sales={sales} customers={customers} expenses={expenses} onUpgrade={() => setShowUpgrade(true)} />}
+      {nav === "dashboard" && <Dashboard user={activeUser} products={products} sales={sales} customers={customers} expenses={expenses} onNav={setNav} />}
+      {nav === "inventory" && <Inventory products={products} setProducts={setProducts} user={activeUser} isPro={user.isPro} />}
+      {nav === "sales" && <Sales sales={sales} setSales={setSales} products={products} setProducts={setProducts} customers={customers} user={activeUser} />}
+      {nav === "customers" && <Customers customers={customers} setCustomers={setCustomers} sales={sales} user={activeUser} isPro={user.isPro} />}
+      {nav === "expenses" && <Expenses expenses={expenses} setExpenses={setExpenses} user={activeUser} />}
+      {nav === "ai" && <AIBrain user={activeUser} products={products} sales={sales} customers={customers} expenses={expenses} onUpgrade={() => setShowUpgrade(true)} />}
       {nav === "feedback" && <FeedbackForm user={user} />}
     </>
+  );
+
+  // Shop switcher component
+  const ShopSwitcher = () => shops.length > 1 ? (
+    <div style={{ padding: "8px 10px", borderBottom: `1px solid ${C.border}` }}>
+      <div style={{ fontSize: 10, fontFamily: C.mono, color: C.muted, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 6 }}>Active Shop</div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+        {shops.map(s => (
+          <button key={s.id} onClick={() => switchShop(s.id)}
+            style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 10px", border: "none", borderRadius: 8, cursor: "pointer", fontFamily: C.font, fontWeight: 600, fontSize: 12, background: s.id === activeShopId ? C.accentLight : C.faint, color: s.id === activeShopId ? C.accent : C.muted }}>
+            <span>🏪 {s.name}</span>
+            {s.id === activeShopId && <span style={{ fontSize: 10 }}>✓</span>}
+          </button>
+        ))}
+      </div>
+      <button onClick={() => setShowShopManager(true)} style={{ width: "100%", background: "transparent", border: `1px dashed ${C.border}`, borderRadius: 8, padding: "6px", color: C.muted, fontFamily: C.font, fontSize: 11, cursor: "pointer", marginTop: 6 }}>
+        + Manage Shops
+      </button>
+    </div>
+  ) : (
+    <div style={{ padding: "4px 10px 8px" }}>
+      <button onClick={() => setShowShopManager(true)} style={{ width: "100%", background: "transparent", border: `1px dashed ${C.border}`, borderRadius: 8, padding: "7px", color: C.muted, fontFamily: C.font, fontSize: 11, cursor: "pointer" }}>
+        + Add Another Shop
+      </button>
+    </div>
   );
 
   // ── MOBILE LAYOUT ──────────────────────────────────
@@ -1396,6 +1534,7 @@ function AppShell({ user: initialUser, onLogout }) {
     <div style={{ minHeight: "100vh", background: C.bg, fontFamily: C.font, paddingBottom: 70 }}>
       <Fonts />
       {showUpgrade && <UpgradeModal user={user} onUpgrade={upgrade} onClose={() => setShowUpgrade(false)} />}
+      {showShopManager && <ShopManager user={user} shops={shops} setShops={setShops} onClose={() => setShowShopManager(false)} />}
 
       {/* Mobile top bar */}
       <div style={{ background: C.surface, borderBottom: `1px solid ${C.border}`, padding: "14px 16px", display: "flex", justifyContent: "space-between", alignItems: "center", position: "sticky", top: 0, zIndex: 100 }}>
@@ -1403,8 +1542,13 @@ function AppShell({ user: initialUser, onLogout }) {
           <div style={{ width: 28, height: 28, background: C.accent, borderRadius: 7, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14 }}>🌍</div>
           <div style={{ fontFamily: C.display, fontSize: 16, fontWeight: 900, color: C.accent }}>BizOS</div>
         </div>
-        <div style={{ textAlign: "right" }}>
-          <div style={{ fontSize: 12, fontWeight: 700, color: C.text }}>{user.business}</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          {shops.length > 1 && (
+            <select value={activeShopId} onChange={e => switchShop(e.target.value)}
+              style={{ fontSize: 12, fontFamily: C.font, fontWeight: 700, color: C.accent, background: C.accentLight, border: `1px solid ${C.accent}30`, borderRadius: 8, padding: "4px 8px", outline: "none" }}>
+              {shops.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+            </select>
+          )}
           {user.isPro && <Badge color={C.accent}>✦ PRO</Badge>}
         </div>
       </div>
@@ -1420,6 +1564,10 @@ function AppShell({ user: initialUser, onLogout }) {
                 <span style={{ fontSize: 20 }}>{n.icon}</span> {n.label}
               </button>
             ))}
+            <button onClick={() => { setShowShopManager(true); setShowMobileMenu(false); }}
+              style={{ width: "100%", display: "flex", alignItems: "center", gap: 14, padding: "14px 12px", border: "none", borderRadius: 10, cursor: "pointer", fontFamily: C.font, fontWeight: 600, fontSize: 15, marginBottom: 4, background: C.faint, color: C.text }}>
+              <span style={{ fontSize: 20 }}>🏪</span> Manage Shops
+            </button>
             {!user.isPro && (
               <button onClick={() => { setShowUpgrade(true); setShowMobileMenu(false); }}
                 style={{ width: "100%", background: C.gold, border: "none", borderRadius: 10, padding: "14px", color: "#fff", fontFamily: C.font, fontWeight: 700, fontSize: 15, cursor: "pointer", marginTop: 8 }}>
@@ -1434,7 +1582,6 @@ function AppShell({ user: initialUser, onLogout }) {
         </div>
       )}
 
-      {/* Page content */}
       <div style={{ padding: "16px" }}>
         <PageContent />
       </div>
@@ -1461,16 +1608,18 @@ function AppShell({ user: initialUser, onLogout }) {
     <div style={{ minHeight: "100vh", background: C.bg, display: "flex", fontFamily: C.font }}>
       <Fonts />
       {showUpgrade && <UpgradeModal user={user} onUpgrade={upgrade} onClose={() => setShowUpgrade(false)} />}
+      {showShopManager && <ShopManager user={user} shops={shops} setShops={setShops} onClose={() => setShowShopManager(false)} />}
       <div style={{ width: 230, background: C.surface, borderRight: `1px solid ${C.border}`, display: "flex", flexDirection: "column", position: "fixed", height: "100vh", zIndex: 50 }}>
-        <div style={{ padding: "24px 20px 20px", borderBottom: `1px solid ${C.border}` }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+        <div style={{ padding: "24px 20px 16px", borderBottom: `1px solid ${C.border}` }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
             <div style={{ width: 32, height: 32, background: C.accent, borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16 }}>🌍</div>
             <div style={{ fontFamily: C.display, fontSize: 18, fontWeight: 900, color: C.accent }}>BizOS</div>
           </div>
-          <div style={{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 2 }}>{user.business}</div>
+          <div style={{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 2 }}>{activeShop?.name || user.business}</div>
           <div style={{ fontSize: 12, color: C.muted }}>{user.name}</div>
           {user.isPro && <Badge color={C.accent} style={{ marginTop: 8, display: "inline-flex" }}>✦ BUSINESS</Badge>}
         </div>
+        <ShopSwitcher />
         <nav style={{ flex: 1, padding: "12px 10px", overflowY: "auto" }}>
           {DESKTOP_NAV.map(n => (
             <button key={n.id} onClick={() => setNav(n.id)} style={{ width: "100%", display: "flex", alignItems: "center", gap: 12, padding: "11px 12px", border: "none", borderRadius: 10, cursor: "pointer", fontFamily: C.font, fontWeight: 600, fontSize: 14, marginBottom: 2, background: nav === n.id ? C.accentLight : "transparent", color: nav === n.id ? C.accent : C.muted }}>
