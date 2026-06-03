@@ -197,13 +197,23 @@ async function askAI(system, message) {
 
 // ── PAYSTACK ──────────────────────────────────────────────────────────────────
 function openPaystack(email, amount, onSuccess) {
-  const h = window.PaystackPop?.setup({
-    key: "pk_test_08c5d5107aa8861893580f4c2b9acc055efb457a",
-    email, amount: amount * 100, currency: "KES",
-    callback: r => r.status === "success" && onSuccess(r.reference),
-    onClose: () => {},
-  });
-  h?.openIframe();
+  function run() {
+    const h = window.PaystackPop?.setup({
+      key: "pk_test_08c5d5107aa8861893580f4c2b9acc055efb457a",
+      email, amount: amount * 100, currency: "KES",
+      callback: r => r.status === "success" && onSuccess(r.reference),
+      onClose: () => {},
+    });
+    h?.openIframe();
+  }
+  if (window.PaystackPop) {
+    run();
+  } else {
+    const script = document.createElement("script");
+    script.src = "https://js.paystack.co/v1/inline.js";
+    script.onload = run;
+    document.head.appendChild(script);
+  }
 }
 
 // ══════════════════════════════════════════════════════
