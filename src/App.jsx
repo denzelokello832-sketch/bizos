@@ -180,13 +180,16 @@ async function markReferralPaid(userId) {
 }
 
 // ── CLAUDE AI ─────────────────────────────────────────────────────────────────
+const ANTHROPIC_KEY = "YOUR_ANTHROPIC_KEY_HERE"; // Replace with sk-ant-...
 async function askAI(system, message) {
   try {
     const res = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
-      headers: { "Content-Type": "application/json",
-"x-api-key": "sk-ant-api03-CKF...0gAA",
-"anthropic-version": "2023-06-01", },
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": ANTHROPIC_KEY,
+        "anthropic-version": "2023-06-01",
+      },
       body: JSON.stringify({
         model: "claude-sonnet-4-20250514", max_tokens: 1000,
         system, messages: [{ role: "user", content: message }],
@@ -896,7 +899,12 @@ function Sales({ sales, setSales, products, setProducts, customers, user }) {
   const [selectedCustomer, setSelectedCustomer] = useState("");
   const [payMethod, setPayMethod] = useState("cash");
   const [filter, setFilter] = useState("today");
+  const [productSearch, setProductSearch] = useState("");
   const curr = user.currency || "KSh";
+
+  const filteredProducts = products.filter(p =>
+    p.name?.toLowerCase().includes(productSearch.toLowerCase())
+  );
 
   function addToCart(p) {
     if (p.qty < 1) return alert("Out of stock.");
@@ -947,9 +955,17 @@ function Sales({ sales, setSales, products, setProducts, customers, user }) {
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
             <div>
               <div style={{ fontSize: 12, fontWeight: 700, color: C.muted, marginBottom: 10, textTransform: "uppercase" }}>Select Products</div>
+              <input
+                value={productSearch}
+                onChange={e => setProductSearch(e.target.value)}
+                placeholder="🔍 Search product..."
+                style={{ width: "100%", boxSizing: "border-box", border: `1.5px solid ${C.border}`, borderRadius: 8, padding: "8px 12px", fontFamily: C.font, fontSize: 13, marginBottom: 8, outline: "none", background: C.bg, color: C.text }}
+                onFocus={e => e.target.style.borderColor = C.accent}
+                onBlur={e => e.target.style.borderColor = C.border}
+              />
               <div style={{ maxHeight: 280, overflowY: "auto", border: `1px solid ${C.border}`, borderRadius: 10, padding: 8 }}>
-                {products.length === 0 ? <div style={{ padding: 20, textAlign: "center", color: C.muted, fontSize: 13 }}>No products yet.</div>
-                  : products.map(p => (
+                {filteredProducts.length === 0 ? <div style={{ padding: 20, textAlign: "center", color: C.muted, fontSize: 13 }}>No products found.</div>
+                  : filteredProducts.map(p => (
                     <div key={p.id} onClick={() => addToCart(p)} style={{ display: "flex", justifyContent: "space-between", padding: "10px 12px", borderRadius: 8, cursor: "pointer", marginBottom: 4, background: C.faint }}
                       onMouseEnter={e => e.currentTarget.style.background = C.accentLight}
                       onMouseLeave={e => e.currentTarget.style.background = C.faint}>
