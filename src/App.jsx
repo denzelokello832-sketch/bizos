@@ -199,7 +199,7 @@ async function askAI(system, message) {
 function openPaystack(email, amount, onSuccess) {
   function run() {
     const h = window.PaystackPop?.setup({
-      key: "pk_live_8adbcd9efedf8e8fca407a3c154648c36a61e617",
+      key: "pk_test_08c5d5107aa8861893580f4c2b9acc055efb457a",
       email, amount: amount * 100, currency: "KES",
       callback: r => r.status === "success" && onSuccess(r.reference),
       onClose: () => {},
@@ -1432,6 +1432,22 @@ function AppShell({ user: initialUser, onLogout }) {
       setShopsState(finalShops);
       const shopId = finalShops[0].id;
       setActiveShopId(shopId);
+
+      // ── MIGRATION: move old data to new shop-based keys ──
+      const [oldProducts, newProducts] = await Promise.all([
+        getUserData(userId, "products", null),
+        getUserData(userId, `products_${shopId}`, null),
+      ]);
+      if (oldProducts && oldProducts.length > 0 && (!newProducts || newProducts.length === 0)) {
+        // Migrate old data to new shop key
+        await Promise.all([
+          saveUserData(userId, `products_${shopId}`, oldProducts),
+          saveUserData(userId, `sales_${shopId}`, await getUserData(userId, "sales", [])),
+          saveUserData(userId, `customers_${shopId}`, await getUserData(userId, "customers", [])),
+          saveUserData(userId, `expenses_${shopId}`, await getUserData(userId, "expenses", [])),
+        ]);
+      }
+
       const [p, s, c, e] = await Promise.all([
         getUserData(userId, `products_${shopId}`, []),
         getUserData(userId, `sales_${shopId}`, []),
