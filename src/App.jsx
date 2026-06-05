@@ -180,23 +180,15 @@ async function markReferralPaid(userId) {
 }
 
 // ── CLAUDE AI ─────────────────────────────────────────────────────────────────
-const ANTHROPIC_KEY = "sk-ant-api03-CKF...0gAA"; // Replace with sk-ant-...
 async function askAI(system, message) {
   try {
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
+    const res = await fetch("/api/ai", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": ANTHROPIC_KEY,
-        "anthropic-version": "2023-06-01",
-      },
-      body: JSON.stringify({
-        model: "claude-sonnet-4-20250514", max_tokens: 1000,
-        system, messages: [{ role: "user", content: message }],
-      }),
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ system, message }),
     });
     const j = await res.json();
-    return j.content?.[0]?.text || "Could not get a response.";
+    return j.text || "Could not get a response.";
   } catch { return "AI is unavailable right now."; }
 }
 
