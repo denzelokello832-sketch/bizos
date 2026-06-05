@@ -180,7 +180,7 @@ async function markReferralPaid(userId) {
 }
 
 // ── CLAUDE AI ─────────────────────────────────────────────────────────────────
-const ANTHROPIC_KEY = "YOUR_ANTHROPIC_KEY_HERE"; // Replace with sk-ant-...
+const ANTHROPIC_KEY = "sk-ant-api03-CKF...0gAA"; // Replace with sk-ant-...
 async function askAI(system, message) {
   try {
     const res = await fetch("https://api.anthropic.com/v1/messages", {
