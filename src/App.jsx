@@ -182,9 +182,23 @@ async function markReferralPaid(userId) {
 // ── CLAUDE AI ─────────────────────────────────────────────────────────────────
 async function askAI(system, message) {
   try {
-    const res = await fetch("/api/ai", {
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": "sk-ant-api03-CKF...0gAA",
+        "anthropic-version": "2023-06-01",
+        "anthropic-dangerous-direct-browser-access": "true",
+      },
+      body: JSON.stringify({
+        model: "claude-haiku-4-5-20251001",
+        max_tokens: 1000,
+        system,
+        messages: [{ role: "user", content: message }],
+      }),
+    });
+    const j = await res.json();
+    return j.content?.[0]?.text || "Could not get a response.";
       body: JSON.stringify({ system, message }),
     });
     const j = await res.json();
