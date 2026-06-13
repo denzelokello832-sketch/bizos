@@ -199,10 +199,6 @@ async function askAI(system, message) {
     });
     const j = await res.json();
     return j.content?.[0]?.text || "Could not get a response.";
-      body: JSON.stringify({ system, message }),
-    });
-    const j = await res.json();
-    return j.text || "Could not get a response.";
   } catch { return "AI is unavailable right now."; }
 }
 
@@ -210,7 +206,7 @@ async function askAI(system, message) {
 function openPaystack(email, amount, onSuccess) {
   function run() {
     const h = window.PaystackPop?.setup({
-      key: "pk_test_08c5d5107aa8861893580f4c2b9acc055efb457a",
+      key: "pk_live_8adbcd9efedf8e8fca407a3c154648c36a61e617",
       email, amount: amount * 100, currency: "KES",
       callback: r => r.status === "success" && onSuccess(r.reference),
       onClose: () => {},
