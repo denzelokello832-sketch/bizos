@@ -186,7 +186,7 @@ async function askAI(system, message) {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "x-api-key": "sk-ant-api03-CKF...0gAA",
+        "x-api-key": "import.meta.env.VITE_ANTHROPIC_KEY",
         "anthropic-version": "2023-06-01",
         "anthropic-dangerous-direct-browser-access": "true",
       },
