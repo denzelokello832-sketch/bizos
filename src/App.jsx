@@ -753,11 +753,425 @@ function Dashboard({ user, products, sales, customers, expenses, onNav }) {
     </div>
   );
 }
+// ── BULK IMPORT (CSV) ──────────────────────────────────────────────────────
+// Drop this component into the same file as Inventory (or import it).
+// Expects: setProducts (same prop Inventory already receives), C (theme),
+// Modal, Btn, Badge (your existing components), uid(), today() (your existing helpers).
 
+const CSV_TEMPLATE_HEADERS = ["name", "category", "unit", "buyPrice", "sellPrice", "qty", "lowStockAlert"];
+
+function downloadCsvTemplate() {
+  const sample = [
+    CSV_TEMPLATE_HEADERS.join(","),
+    "Tusker Beer,Beer,bottle,150,200,48,10",
+    "Coca-Cola 500ml,Soft Drinks,bottle,40,60,100,20",
+  ].join("\n");
+  const blob = new Blob([sample], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "bizos_product_template.csv";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+// Minimal CSV line parser that handles quoted fields containing commas.
+function parseCsv(text) {
+  const lines = text.split(/\r\n|\n/).filter(l => l.trim().length > 0);
+  if (lines.length === 0) return { headers: [], rows: [] };
+
+  function parseLine(line) {
+    const out = [];
+    let cur = "";
+    let inQuotes = false;
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i];
+      if (inQuotes) {
+        if (ch === '"' && line[i + 1] === '"') { cur += '"'; i++; }
+        else if (ch === '"') { inQuotes = false; }
+        else { cur += ch; }
+      } else {
+        if (ch === '"') inQuotes = true;
+        else if (ch === ",") { out.push(cur); cur = ""; }
+        else cur += ch;
+      }
+    }
+    out.push(cur);
+    return out.map(s => s.trim());
+  }
+
+  const headers = parseLine(lines[0]).map(h => h.toLowerCase());
+  const rows = lines.slice(1).map(parseLine);
+  return { headers, rows };
+}
+
+function validateRow(rowObj, rowIndex) {
+  const errors = [];
+  if (!rowObj.name || rowObj.name.trim() === "") errors.push("Missing product name");
+
+  const sellPrice = Number(rowObj.sellprice);
+  if (rowObj.sellprice === undefined || rowObj.sellprice === "" || isNaN(sellPrice)) {
+    errors.push("Missing/invalid sellPrice");
+  }
+
+  const qty = Number(rowObj.qty);
+  if (rowObj.qty === undefined || rowObj.qty === "" || isNaN(qty)) {
+    errors.push("Missing/invalid qty");
+  }
+
+  const buyPrice = rowObj.buyprice !== undefined && rowObj.buyprice !== "" ? Number(rowObj.buyprice) : 0;
+  if (isNaN(buyPrice)) errors.push("Invalid buyPrice");
+
+  const lowStockAlert = rowObj.lowstockalert !== undefined && rowObj.lowstockalert !== "" ? Number(rowObj.lowstockalert) : 5;
+  if (isNaN(lowStockAlert)) errors.push("Invalid lowStockAlert");
+
+  return {
+    rowIndex,
+    raw: rowObj,
+    errors,
+    valid: errors.length === 0,
+    product: errors.length === 0 ? {
+      name: rowObj.name.trim(),
+      category: (rowObj.category || "").trim(),
+      unit: (rowObj.unit || "pcs").trim() || "pcs",
+      buyPrice,
+      sellPrice,
+      qty,
+      lowStockAlert,
+    } : null,
+  };
+}
+
+function BulkImport({ setProducts, onClose }) {
+  const [step, setStep] = useState("upload"); // upload | preview | done
+  const [parsedRows, setParsedRows] = useState([]);
+  const [fileName, setFileName] = useState("");
+  const [importing, setImporting] = useState(false);
+  const fileInputRef = useRef(null);
+
+  function handleFile(file) {
+    setFileName(file.name);
+    const reader = new FileReader();
+    reader.onload = e => {
+      const text = e.target.result;
+      const { headers, rows } = parseCsv(text);
+
+      const missingHeaders = CSV_TEMPLATE_HEADERS.filter(h => h !== "category" && h !== "unit" && h !== "buyprice" && h !== "lowstockalert" && !headers.includes(h));
+      // name, sellPrice, qty are required headers; others are optional with defaults
+      const requiredMissing = ["name", "sellprice", "qty"].filter(h => !headers.includes(h));
+
+      if (requiredMissing.length > 0) {
+        alert(`Your CSV is missing required column(s): ${requiredMissing.join(", ")}. Download the template and match those exact column names.`);
+        return;
+      }
+
+      const validated = rows.map((row, idx) => {
+        const rowObj = {};
+        headers.forEach((h, i) => { rowObj[h] = row[i]; });
+        return validateRow(rowObj, idx + 2); // +2 because row 1 is header, humans count from 1
+      });
+
+      setParsedRows(validated);
+      setStep("preview");
+    };
+    reader.readAsText(file);
+  }
+
+  function handleFileInput(e) {
+    const file = e.target.files?.[0];
+    if (file) handleFile(file);
+  }
+
+  function handleDrop(e) {
+    e.preventDefault();
+    const file = e.dataTransfer.files?.[0];
+    if (file) handleFile(file);
+  }
+
+  const validRows = parsedRows.filter(r => r.valid);
+  const invalidRows = parsedRows.filter(r => !r.valid);
+
+  function confirmImport() {
+    setImporting(true);
+    const newProducts = validRows.map(r => ({
+      ...r.product,
+      id: uid(),
+      createdAt: today(),
+    }));
+    setProducts(prev => [...prev, ...newProducts]);
+    setStep("done");
+    setImporting(false);
+  }
+
+  return (
+    <Modal title="Bulk Import Products" onClose={onClose}>
+      {step === "upload" && (
+        <div>
+          <div style={{ marginBottom: 16, fontSize: 13, color: C.muted, lineHeight: 1.5 }}>
+            Upload a CSV file with your products. Use our template to make sure your columns match.
+          </div>
+
+          <button
+            onClick={downloadCsvTemplate}
+            style={{
+              width: "100%", padding: "10px 16px", marginBottom: 16,
+              border: `1px solid ${C.accent}`, background: C.accentLight, color: C.accent,
+              borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: C.mono,
+            }}
+          >
+            ⬇ Download CSV Template
+          </button>
+
+          <div
+            onDragOver={e => e.preventDefault()}
+            onDrop={handleDrop}
+            onClick={() => fileInputRef.current?.click()}
+            style={{
+              border: `2px dashed ${C.border}`, borderRadius: 10, padding: "40px 20px",
+              textAlign: "center", cursor: "pointer", color: C.muted, fontSize: 13,
+            }}
+          >
+            📄 Click or drag your CSV file here
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".csv,text/csv"
+              onChange={handleFileInput}
+              style={{ display: "none" }}
+            />
+          </div>
+
+          <div style={{ marginTop: 16, fontSize: 12, color: C.muted }}>
+            Required columns: <strong>name, sellPrice, qty</strong><br />
+            Optional columns: category, unit, buyPrice, lowStockAlert
+          </div>
+        </div>
+      )}
+
+      {step === "preview" && (
+        <div>
+          <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+            <Badge color={C.accent}>{validRows.length} ready to import</Badge>
+            {invalidRows.length > 0 && <Badge color={C.red}>{invalidRows.length} have errors</Badge>}
+          </div>
+
+          <div style={{ maxHeight: 320, overflowY: "auto", border: `1px solid ${C.border}`, borderRadius: 8 }}>
+            <table style={{ width: "100%", fontSize: 12, borderCollapse: "collapse" }}>
+              <thead>
+                <tr style={{ background: C.bg, textAlign: "left" }}>
+                  <th style={{ padding: 8 }}>Row</th>
+                  <th style={{ padding: 8 }}>Name</th>
+                  <th style={{ padding: 8 }}>Sell Price</th>
+                  <th style={{ padding: 8 }}>Qty</th>
+                  <th style={{ padding: 8 }}>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {parsedRows.map(r => (
+                  <tr key={r.rowIndex} style={{ borderTop: `1px solid ${C.border}`, background: r.valid ? "transparent" : C.redLight }}>
+                    <td style={{ padding: 8 }}>{r.rowIndex}</td>
+                    <td style={{ padding: 8 }}>{r.raw.name || <em>missing</em>}</td>
+                    <td style={{ padding: 8 }}>{r.raw.sellprice || <em>missing</em>}</td>
+                    <td style={{ padding: 8 }}>{r.raw.qty || <em>missing</em>}</td>
+                    <td style={{ padding: 8, color: r.valid ? C.accent : C.red }}>
+                      {r.valid ? "✓ OK" : r.errors.join("; ")}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
+            <button
+              onClick={() => setStep("upload")}
+              style={{ flex: 1, padding: "10px 16px", border: `1px solid ${C.border}`, background: "transparent", color: C.muted, borderRadius: 8, fontSize: 13, cursor: "pointer" }}
+            >
+              ← Back
+            </button>
+            <Btn onClick={confirmImport} disabled={importing || validRows.length === 0} style={{ flex: 1 }}>
+              {importing ? "Importing..." : `Import ${validRows.length} Products`}
+            </Btn>
+          </div>
+        </div>
+      )}
+
+      {step === "done" && (
+        <div style={{ textAlign: "center", padding: "20px 0" }}>
+          <div style={{ fontSize: 40, marginBottom: 12 }}>✓</div>
+          <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 8 }}>
+            {validRows.length} products imported
+          </div>
+          {invalidRows.length > 0 && (
+            <div style={{ fontSize: 13, color: C.muted, marginBottom: 16 }}>
+              {invalidRows.length} rows were skipped due to errors. Fix them in your CSV and re-import if needed.
+            </div>
+          )}
+          <Btn onClick={onClose}>Done</Btn>
+        </div>
+      )}
+    </Modal>
+  );
+}
+// ── QUICK ADD (fast manual entry from a paper list) ─────────────────────────
+// Drop this component into the same file as Inventory (or import it).
+// Optimized for speed: Enter jumps field-to-field, last field's Enter saves
+// and immediately refocuses the first field for the next product.
+// Expects: setProducts, C (theme), Modal, Btn (your existing components),
+// uid(), today() (your existing helpers).
+
+function QuickAddProduct({ setProducts, onClose }) {
+  const blank = { name: "", category: "", unit: "pcs", buyPrice: "", sellPrice: "", qty: "", lowStockAlert: "5" };
+  const [form, setForm] = useState(blank);
+  const [addedCount, setAddedCount] = useState(0);
+  const [lastAdded, setLastAdded] = useState("");
+
+  const nameRef = useRef(null);
+  const categoryRef = useRef(null);
+  const unitRef = useRef(null);
+  const buyPriceRef = useRef(null);
+  const sellPriceRef = useRef(null);
+  const qtyRef = useRef(null);
+  const lowStockRef = useRef(null);
+
+  const refs = [nameRef, categoryRef, unitRef, buyPriceRef, sellPriceRef, qtyRef, lowStockRef];
+
+  useEffect(() => {
+    nameRef.current?.focus();
+  }, []);
+
+  function set(key) {
+    return e => setForm(p => ({ ...p, [key]: e.target.value }));
+  }
+
+  function focusNext(index) {
+    const next = refs[index + 1];
+    if (next && next.current) {
+      next.current.focus();
+      if (next.current.select) next.current.select();
+    } else {
+      saveAndContinue();
+    }
+  }
+
+  function handleKeyDown(index) {
+    return e => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        focusNext(index);
+      }
+    };
+  }
+
+  function saveAndContinue() {
+    if (!form.name.trim()) {
+      nameRef.current?.focus();
+      return;
+    }
+    if (!form.sellPrice || isNaN(Number(form.sellPrice))) {
+      sellPriceRef.current?.focus();
+      sellPriceRef.current?.select();
+      return;
+    }
+    if (!form.qty || isNaN(Number(form.qty))) {
+      qtyRef.current?.focus();
+      qtyRef.current?.select();
+      return;
+    }
+
+    const newProduct = {
+      id: uid(),
+      name: form.name.trim(),
+      category: form.category.trim(),
+      unit: form.unit.trim() || "pcs",
+      buyPrice: Number(form.buyPrice || 0),
+      sellPrice: Number(form.sellPrice),
+      qty: Number(form.qty),
+      lowStockAlert: Number(form.lowStockAlert || 5),
+      createdAt: today(),
+    };
+
+    setProducts(prev => [...prev, newProduct]);
+    setLastAdded(newProduct.name);
+    setAddedCount(c => c + 1);
+
+    // Keep category, unit, buyPrice, lowStockAlert (often repeat across a paper list)
+    // Reset name, sellPrice, qty (these usually differ per product)
+    setForm(p => ({ ...p, name: "", sellPrice: "", qty: "" }));
+    nameRef.current?.focus();
+  }
+
+  const inputStyle = {
+    width: "100%", padding: "10px 12px", border: `1px solid ${C.border}`,
+    borderRadius: 8, fontSize: 14, fontFamily: C.mono, outline: "none",
+  };
+  const labelStyle = { fontSize: 11, color: C.muted, marginBottom: 4, display: "block", fontWeight: 600 };
+
+  return (
+    <Modal title="Quick Add" onClose={onClose}>
+      <div style={{ marginBottom: 12, fontSize: 12, color: C.muted, lineHeight: 1.5 }}>
+        Type fast: press <strong>Enter</strong> to jump to the next field. Pressing Enter on the last field saves and starts the next product automatically.
+      </div>
+
+      {addedCount > 0 && (
+        <div style={{ marginBottom: 12, padding: "8px 12px", background: C.accentLight, color: C.accent, borderRadius: 8, fontSize: 13, fontWeight: 600 }}>
+          ✓ {addedCount} added{lastAdded ? ` · last: ${lastAdded}` : ""}
+        </div>
+      )}
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+        <div style={{ gridColumn: "1 / -1" }}>
+          <label style={labelStyle}>Product Name *</label>
+          <input ref={nameRef} style={inputStyle} value={form.name} onChange={set("name")} onKeyDown={handleKeyDown(0)} placeholder="Tusker Beer" />
+        </div>
+        <div>
+          <label style={labelStyle}>Category</label>
+          <input ref={categoryRef} style={inputStyle} value={form.category} onChange={set("category")} onKeyDown={handleKeyDown(1)} placeholder="Beer" />
+        </div>
+        <div>
+          <label style={labelStyle}>Unit</label>
+          <input ref={unitRef} style={inputStyle} value={form.unit} onChange={set("unit")} onKeyDown={handleKeyDown(2)} placeholder="bottle" />
+        </div>
+        <div>
+          <label style={labelStyle}>Buy Price</label>
+          <input ref={buyPriceRef} style={inputStyle} type="number" value={form.buyPrice} onChange={set("buyPrice")} onKeyDown={handleKeyDown(3)} placeholder="150" />
+        </div>
+        <div>
+          <label style={labelStyle}>Sell Price *</label>
+          <input ref={sellPriceRef} style={inputStyle} type="number" value={form.sellPrice} onChange={set("sellPrice")} onKeyDown={handleKeyDown(4)} placeholder="200" />
+        </div>
+        <div>
+          <label style={labelStyle}>Quantity *</label>
+          <input ref={qtyRef} style={inputStyle} type="number" value={form.qty} onChange={set("qty")} onKeyDown={handleKeyDown(5)} placeholder="48" />
+        </div>
+        <div>
+          <label style={labelStyle}>Low Stock Alert</label>
+          <input ref={lowStockRef} style={inputStyle} type="number" value={form.lowStockAlert} onChange={set("lowStockAlert")} onKeyDown={handleKeyDown(6)} placeholder="10" />
+        </div>
+      </div>
+
+      <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
+        <button
+          onClick={onClose}
+          style={{ flex: 1, padding: "10px 16px", border: `1px solid ${C.border}`, background: "transparent", color: C.muted, borderRadius: 8, fontSize: 13, cursor: "pointer" }}
+        >
+          Done ({addedCount} added)
+        </button>
+        <Btn onClick={saveAndContinue} style={{ flex: 1 }}>
+          Save & Next →
+        </Btn>
+      </div>
+    </Modal>
+  );
+}
 // ══════════════════════════════════════════════════════
 // INVENTORY
 // ══════════════════════════════════════════════════════
 function Inventory({ products, setProducts, user, isPro }) {
+const [showBulkImport, setShowBulkImport] = useState(false);
+const [showQuickAdd, setShowQuickAdd] = useState(false);
   const [showAdd, setShowAdd] = useState(false);
   const [editProduct, setEditProduct] = useState(null);
   const [search, setSearch] = useState("");
@@ -799,7 +1213,13 @@ function Inventory({ products, setProducts, user, isPro }) {
           <h2 style={{ fontFamily: C.display, fontWeight: 900, fontSize: 24, margin: "0 0 4px" }}>Inventory</h2>
           <div style={{ color: C.muted, fontSize: 13 }}>{products.length} products</div>
         </div>
-        {canAdd ? <Btn onClick={() => setShowAdd(true)}>+ Add Product</Btn> : <Badge color={C.gold}>Upgrade for unlimited</Badge>}
+        {canAdd ? (
+  <div style={{ display: "flex", gap: 8 }}>
+    <Btn onClick={() => setShowAdd(true)}>+ Add Product</Btn>
+    <button onClick={() => setShowQuickAdd(true)} style={{ border: `1px solid ${C.accent}`, background: "transparent", color: C.accent, borderRadius: 8, padding: "8px 14px", fontSize: 13, cursor: "pointer", fontWeight: 700 }}>⚡ Quick Add</button>
+    <button onClick={() => setShowBulkImport(true)} style={{ border: `1px solid ${C.accent}`, background: "transparent", color: C.accent, borderRadius: 8, padding: "8px 14px", fontSize: 13, cursor: "pointer", fontWeight: 700 }}>📄 Import CSV</button>
+  </div>
+) : <Badge color={C.gold}>Upgrade for unlimited</Badge>}
       </div>
       <Input value={search} onChange={setSearch} placeholder="🔍 Search products..." />
       <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
@@ -813,7 +1233,8 @@ function Inventory({ products, setProducts, user, isPro }) {
         </button>
       </div>
 
-      {/* Add modal */}
+      {/* Add modal */}{showQuickAdd && <QuickAddProduct setProducts={setProducts} onClose={() => setShowQuickAdd(false)} />}
+{showBulkImport && <BulkImport setProducts={setProducts} onClose={() => setShowBulkImport(false)} />}
       {showAdd && (
         <Modal title="Add Product" onClose={() => setShowAdd(false)}>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
