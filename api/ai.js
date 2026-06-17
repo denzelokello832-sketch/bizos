@@ -25,9 +25,14 @@ export default async function handler(req, res) {
     });
 
     const data = await response.json();
+
+    if (data.error) {
+      return res.status(500).json({ error: "DEBUG ANTHROPIC: " + JSON.stringify(data.error) });
+    }
+
     const text = data.content?.[0]?.text || "Could not get a response.";
     res.status(200).json({ text });
   } catch (error) {
-    res.status(500).json({ error: "AI unavailable right now." });
+    res.status(500).json({ error: "DEBUG CATCH: " + error.message });
   }
 }
