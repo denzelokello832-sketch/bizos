@@ -207,7 +207,9 @@ function openPaystack(email, amount, onSuccess) {
   function run() {
     const h = window.PaystackPop?.setup({
       key: "pk_live_8adbcd9efedf8e8fca407a3c154648c36a61e617",
-      email, amount: amount * 100, currency: "KES",
+      email,
+      amount: amount * 100,
+      currency: "KES",
       callback: r => r.status === "success" && onSuccess(r.reference),
       onClose: () => {},
     });
