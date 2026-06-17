@@ -25,9 +25,17 @@ export default async function handler(req, res) {
     });
 
     const data = await response.json();
+
+    if (data.error) {
+      // Log the real reason server-side (visible in Vercel logs) without exposing it to users
+      console.error("Anthropic API error:", data.error);
+      return res.status(500).json({ error: "AI advisor is temporarily unavailable. Please try again later." });
+    }
+
     const text = data.content?.[0]?.text || "Could not get a response.";
     res.status(200).json({ text });
   } catch (error) {
-    res.status(500).json({ error: "AI unavailable right now." });
+    console.error("AI handler error:", error.message);
+    res.status(500).json({ error: "AI advisor is temporarily unavailable. Please try again later." });
   }
 }
