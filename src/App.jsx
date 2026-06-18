@@ -1893,6 +1893,176 @@ function ShopManager({ user, shops, setShops, onClose }) {
     </Modal>
   );
 }
+// ── ADMIN PAGE ────────────────────────────────────────────────────────────────
+// Only visible to the owner (Denzel). Gated by userId.
+// Shows all users, Pro status, expiry dates, and subscription health.
+// Place this component above AppShell in App.jsx.
+// Requires: C, Card, Badge, Btn (existing components), db (Firebase instance),
+// collection, getDocs (already imported from firebase/firestore).
+
+const ADMIN_USER_ID = "xdkc96BUoJhgb2j5t2A9aoXLtpW2";
+
+function AdminPage({ currentUserId }) {
+  const [users, setUsers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
+
+  useEffect(() => {
+    async function loadUsers() {
+      setLoading(true);
+      try {
+        const snap = await getDocs(collection(db, "users"));
+        const data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        // Sort: Pro users first, then by signup date
+        data.sort((a, b) => {
+          if (a.isPro && !b.isPro) return -1;
+          if (!a.isPro && b.isPro) return 1;
+          return 0;
+        });
+        setUsers(data);
+      } catch (e) {
+        console.error("Admin load error:", e);
+      }
+      setLoading(false);
+    }
+    loadUsers();
+  }, []);
+
+  if (currentUserId !== ADMIN_USER_ID) {
+    return (
+      <div style={{ padding: 40, textAlign: "center", color: C.muted }}>
+        🔒 Access denied.
+      </div>
+    );
+  }
+
+  const now = new Date();
+
+  function getProStatus(user) {
+    if (!user.isPro) return { label: "Free", color: C.muted, bg: C.faint };
+    if (!user.proExpiresAt) return { label: "Pro (no expiry)", color: C.accent, bg: C.accentLight };
+    const expiresAt = new Date(user.proExpiresAt);
+    const msLeft = expiresAt - now;
+    const daysLeft = Math.ceil(msLeft / (24 * 60 * 60 * 1000));
+    if (daysLeft <= 0) return { label: "Expired", color: C.red, bg: C.redLight };
+    if (daysLeft <= 5) return { label: `Expiring in ${daysLeft}d`, color: C.gold, bg: C.goldLight || "#fff8e1" };
+    return { label: `Pro · ${daysLeft}d left`, color: C.accent, bg: C.accentLight };
+  }
+
+  const proUsers = users.filter(u => u.isPro);
+  const freeUsers = users.filter(u => !u.isPro);
+  const expiringSoon = users.filter(u => {
+    if (!u.isPro || !u.proExpiresAt) return false;
+    const daysLeft = Math.ceil((new Date(u.proExpiresAt) - now) / (24 * 60 * 60 * 1000));
+    return daysLeft <= 5 && daysLeft > 0;
+  });
+  const expired = users.filter(u => {
+    if (!u.isPro || !u.proExpiresAt) return false;
+    return new Date(u.proExpiresAt) < now;
+  });
+
+  const filtered = users.filter(u =>
+    (u.name || "").toLowerCase().includes(search.toLowerCase()) ||
+    (u.email || "").toLowerCase().includes(search.toLowerCase()) ||
+    (u.business || "").toLowerCase().includes(search.toLowerCase())
+  );
+
+  return (
+    <div style={{ padding: "0 0 40px" }}>
+      {/* Header */}
+      <div style={{ marginBottom: 20 }}>
+        <h2 style={{ fontFamily: C.display, fontWeight: 900, fontSize: 24, margin: "0 0 4px" }}>
+          Admin 🔐
+        </h2>
+        <div style={{ color: C.muted, fontSize: 13 }}>Only you can see this page.</div>
+      </div>
+
+      {/* Stats row */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10, marginBottom: 20 }}>
+        {[
+          { label: "Total Users", value: users.length, color: C.text },
+          { label: "Pro Users", value: proUsers.length, color: C.accent },
+          { label: "Expiring Soon", value: expiringSoon.length, color: C.gold },
+          { label: "Expired", value: expired.length, color: C.red },
+        ].map(s => (
+          <div key={s.label} style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10, padding: "12px 14px" }}>
+            <div style={{ fontSize: 22, fontWeight: 900, fontFamily: C.mono, color: s.color }}>{s.value}</div>
+            <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>{s.label}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* MRR estimate */}
+      <div style={{ background: C.accentLight, border: `1px solid ${C.accent}`, borderRadius: 10, padding: "12px 16px", marginBottom: 20, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div style={{ fontSize: 13, color: C.accent, fontWeight: 600 }}>Estimated MRR</div>
+        <div style={{ fontFamily: C.mono, fontWeight: 900, fontSize: 20, color: C.accent }}>
+          KSh {(proUsers.length * 1500).toLocaleString()}
+        </div>
+      </div>
+
+      {/* Search */}
+      <input
+        value={search}
+        onChange={e => setSearch(e.target.value)}
+        placeholder="🔍 Search by name, email, or business..."
+        style={{
+          width: "100%", padding: "10px 14px", border: `1px solid ${C.border}`,
+          borderRadius: 8, fontSize: 13, fontFamily: C.mono, marginBottom: 16,
+          outline: "none", boxSizing: "border-box",
+        }}
+      />
+
+      {/* Users table */}
+      {loading ? (
+        <div style={{ textAlign: "center", color: C.muted, padding: 40 }}>Loading users...</div>
+      ) : filtered.length === 0 ? (
+        <div style={{ textAlign: "center", color: C.muted, padding: 40 }}>No users found.</div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {filtered.map(u => {
+            const status = getProStatus(u);
+            return (
+              <div
+                key={u.id}
+                style={{
+                  background: C.surface, border: `1px solid ${C.border}`,
+                  borderRadius: 10, padding: "12px 16px",
+                  display: "flex", justifyContent: "space-between",
+                  alignItems: "center", flexWrap: "wrap", gap: 8,
+                }}
+              >
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 2 }}>
+                    {u.name || "—"}{u.id === currentUserId ? " (you)" : ""}
+                  </div>
+                  <div style={{ fontSize: 12, color: C.muted }}>{u.email || "—"}</div>
+                  {u.business && (
+                    <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>🏪 {u.business}</div>
+                  )}
+                  {u.proExpiresAt && u.isPro && (
+                    <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>
+                      Expires: {new Date(u.proExpiresAt).toLocaleDateString("en-KE", { day: "numeric", month: "short", year: "numeric" })}
+                    </div>
+                  )}
+                </div>
+                <div
+                  style={{
+                    background: status.bg, color: status.color,
+                    borderRadius: 6, padding: "4px 10px",
+                    fontSize: 12, fontWeight: 700, fontFamily: C.mono,
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {status.label}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
 function AppShell({ user: initialUser, onLogout }) {
   const [user, setUser] = useState(initialUser);
   const [nav, setNav] = useState("dashboard");
@@ -2035,6 +2205,7 @@ function AppShell({ user: initialUser, onLogout }) {
       {nav === "expenses" && <Expenses expenses={expenses} setExpenses={setExpenses} user={activeUser} />}
       {nav === "ai" && <AIBrain user={activeUser} products={products} sales={sales} customers={customers} expenses={expenses} onUpgrade={() => setShowUpgrade(true)} />}
       {nav === "feedback" && <FeedbackForm user={user} />}
+      {nav === "admin" && <AdminPage currentUserId={userId} />}
     </>
   );
 
@@ -2060,12 +2231,7 @@ function AppShell({ user: initialUser, onLogout }) {
       <button onClick={() => setShowShopManager(true)} style={{ width: "100%", background: "transparent", border: `1px dashed ${C.border}`, borderRadius: 8, padding: "7px", color: C.muted, fontFamily: C.font, fontSize: 11, cursor: "pointer" }}>
         + Add Another Shop
       </button>
-    <div 
-  onClick={() => { if (userId === "xdkc96BUoJhgb2j5t2A9aoXLtpW2") setNav("admin"); }}
-  style={{ fontFamily: C.display, fontSize: 16, fontWeight: 900, color: C.accent, cursor: "pointer" }}
->
-  BizOS
-</div>
+    </div>
   );
 
   // ── MOBILE LAYOUT ──────────────────────────────────
@@ -2080,7 +2246,7 @@ function AppShell({ user: initialUser, onLogout }) {
       <div style={{ background: C.surface, borderBottom: `1px solid ${C.border}`, padding: "14px 16px", display: "flex", justifyContent: "space-between", alignItems: "center", position: "sticky", top: 0, zIndex: 100 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <div style={{ width: 28, height: 28, background: C.accent, borderRadius: 7, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14 }}>🌍</div>
-          <div style={{ fontFamily: C.display, fontSize: 16, fontWeight: 900, color: C.accent }}>BizOS</div>
+          <div style={{ fontFamily: C.display, fontSize: 16, fontWeight: 900, color: C.accent }}>BizOS<div onClick={() => { if (userId === "xdkc96BUoJhgb2j5t2A9aoXLtpW2") setNav("admin"); }} style={{ fontFamily: C.display, fontSize: 16, fontWeight: 900, color: C.accent, cursor: "pointer" }}>BizOS</div>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           {shops.length > 1 && (
