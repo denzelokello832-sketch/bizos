@@ -55,9 +55,9 @@ async function getUserData(userId, key, defaultVal) {
   } catch (e) { return defaultVal; }
 }
 
-async function setUserPro(userId, isPro) {
+async function setUserPro(userId, isPro, expiresAt = null) {
   try {
-    await setDoc(doc(db, "users", userId), { isPro, updatedAt: now() }, { merge: true });
+    await setDoc(doc(db, "users", userId), { isPro, proExpiresAt: expiresAt, updatedAt: now() }, { merge: true });
   } catch (e) { console.error("Pro update error:", e); }
 }
 
@@ -1898,7 +1898,15 @@ function AppShell({ user: initialUser, onLogout }) {
         getUserData(userId, `expenses_${shopId}`, []),
       ]);
       setProductsState(p); setSalesState(s); setCustomersState(c); setExpensesState(e);
-      if (profile.isPro !== undefined) setUser(u => ({ ...u, isPro: profile.isPro }));
+      let currentIsPro = profile.isPro;
+      if (currentIsPro && profile.proExpiresAt) {
+        const expired = new Date(profile.proExpiresAt) < new Date();
+        if (expired) {
+          currentIsPro = false;
+          await setUserPro(userId, false, null); // downgrade in Firestore too
+        }
+      }
+      if (currentIsPro !== undefined) setUser(u => ({ ...u, isPro: currentIsPro, proExpiresAt: profile.proExpiresAt }));
       setLoading(false);
     }
     loadData();
@@ -1932,9 +1940,10 @@ function AppShell({ user: initialUser, onLogout }) {
   const setExpenses = (updater) => setExpensesState(prev => { const next = typeof updater === "function" ? updater(prev) : updater; saveUserData(userId, `expenses_${activeShopId}`, next); return next; });
 
   async function upgrade() {
-    await setUserPro(userId, true);
+    const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+    await setUserPro(userId, true, expiresAt);
     await markReferralPaid(userId);
-    setUser(u => ({ ...u, isPro: true }));
+    setUser(u => ({ ...u, isPro: true, proExpiresAt: expiresAt }));
     setShowUpgrade(false);
   }
 
