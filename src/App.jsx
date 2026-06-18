@@ -2012,6 +2012,62 @@ function AppShell({ user: initialUser, onLogout }) {
     <div style={{ minHeight: "100vh", background: C.bg, fontFamily: C.font, paddingBottom: 70 }}>
       <Fonts />
       {showUpgrade && <UpgradeModal user={user} onUpgrade={upgrade} onClose={() => setShowUpgrade(false)} />}
+// ── PRO EXPIRY BANNER ────────────────────────────────────────────────────
+// Shows a warning banner when Pro plan is expiring soon (within 5 days) or has expired.
+// Expects: user (with isPro, proExpiresAt), C (theme), onUpgradeClick (opens UpgradeModal).
+
+function ProExpiryBanner({ user, onUpgradeClick }) {
+  if (!user?.isPro || !user?.proExpiresAt) return null;
+
+  const expiresAt = new Date(user.proExpiresAt);
+  const now = new Date();
+  const msLeft = expiresAt - now;
+  const daysLeft = Math.ceil(msLeft / (24 * 60 * 60 * 1000));
+
+  // Only show banner within 5 days of expiry (or already expired, though that
+  // case should normally auto-downgrade on load before this ever renders).
+  if (daysLeft > 5) return null;
+
+  const expired = daysLeft <= 0;
+
+  return (
+    <div
+      style={{
+        background: expired ? C.redLight : C.goldLight || "#fff8e1",
+        borderBottom: `1px solid ${expired ? C.red : C.gold}`,
+        padding: "10px 16px",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        gap: 12,
+        flexWrap: "wrap",
+        fontSize: 13,
+      }}
+    >
+      <div style={{ color: expired ? C.red : "#92700a", fontWeight: 600 }}>
+        {expired
+          ? "⚠ Your Pro plan has expired."
+          : `⏳ Your Pro plan expires in ${daysLeft} day${daysLeft === 1 ? "" : "s"}.`}
+      </div>
+      <button
+        onClick={onUpgradeClick}
+        style={{
+          background: expired ? C.red : C.gold,
+          color: "#fff",
+          border: "none",
+          borderRadius: 6,
+          padding: "6px 14px",
+          fontSize: 12,
+          fontWeight: 700,
+          cursor: "pointer",
+          whiteSpace: "nowrap",
+        }}
+      >
+        Renew Now
+      </button>
+    </div>
+  );
+}
       {showShopManager && <ShopManager user={user} shops={shops} setShops={setShops} onClose={() => setShowShopManager(false)} />}
 
       {/* Mobile top bar */}
@@ -2086,6 +2142,62 @@ function AppShell({ user: initialUser, onLogout }) {
     <div style={{ minHeight: "100vh", background: C.bg, display: "flex", fontFamily: C.font }}>
       <Fonts />
       {showUpgrade && <UpgradeModal user={user} onUpgrade={upgrade} onClose={() => setShowUpgrade(false)} />}
+ // ── PRO EXPIRY BANNER ────────────────────────────────────────────────────
+// Shows a warning banner when Pro plan is expiring soon (within 5 days) or has expired.
+// Expects: user (with isPro, proExpiresAt), C (theme), onUpgradeClick (opens UpgradeModal).
+
+function ProExpiryBanner({ user, onUpgradeClick }) {
+  if (!user?.isPro || !user?.proExpiresAt) return null;
+
+  const expiresAt = new Date(user.proExpiresAt);
+  const now = new Date();
+  const msLeft = expiresAt - now;
+  const daysLeft = Math.ceil(msLeft / (24 * 60 * 60 * 1000));
+
+  // Only show banner within 5 days of expiry (or already expired, though that
+  // case should normally auto-downgrade on load before this ever renders).
+  if (daysLeft > 5) return null;
+
+  const expired = daysLeft <= 0;
+
+  return (
+    <div
+      style={{
+        background: expired ? C.redLight : C.goldLight || "#fff8e1",
+        borderBottom: `1px solid ${expired ? C.red : C.gold}`,
+        padding: "10px 16px",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        gap: 12,
+        flexWrap: "wrap",
+        fontSize: 13,
+      }}
+    >
+      <div style={{ color: expired ? C.red : "#92700a", fontWeight: 600 }}>
+        {expired
+          ? "⚠ Your Pro plan has expired."
+          : `⏳ Your Pro plan expires in ${daysLeft} day${daysLeft === 1 ? "" : "s"}.`}
+      </div>
+      <button
+        onClick={onUpgradeClick}
+        style={{
+          background: expired ? C.red : C.gold,
+          color: "#fff",
+          border: "none",
+          borderRadius: 6,
+          padding: "6px 14px",
+          fontSize: 12,
+          fontWeight: 700,
+          cursor: "pointer",
+          whiteSpace: "nowrap",
+        }}
+      >
+        Renew Now
+      </button>
+    </div>
+  );
+}
       {showShopManager && <ShopManager user={user} shops={shops} setShops={setShops} onClose={() => setShowShopManager(false)} />}
       <div style={{ width: 230, background: C.surface, borderRight: `1px solid ${C.border}`, display: "flex", flexDirection: "column", position: "fixed", height: "100vh", zIndex: 50 }}>
         <div style={{ padding: "24px 20px 16px", borderBottom: `1px solid ${C.border}` }}>
