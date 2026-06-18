@@ -2060,7 +2060,12 @@ function AppShell({ user: initialUser, onLogout }) {
       <button onClick={() => setShowShopManager(true)} style={{ width: "100%", background: "transparent", border: `1px dashed ${C.border}`, borderRadius: 8, padding: "7px", color: C.muted, fontFamily: C.font, fontSize: 11, cursor: "pointer" }}>
         + Add Another Shop
       </button>
-    </div>
+    <div 
+  onClick={() => { if (userId === "xdkc96BUoJhgb2j5t2A9aoXLtpW2") setNav("admin"); }}
+  style={{ fontFamily: C.display, fontSize: 16, fontWeight: 900, color: C.accent, cursor: "pointer" }}
+>
+  BizOS
+</div>
   );
 
   // ── MOBILE LAYOUT ──────────────────────────────────
@@ -2143,7 +2148,7 @@ function AppShell({ user: initialUser, onLogout }) {
     <div style={{ minHeight: "100vh", background: C.bg, display: "flex", fontFamily: C.font }}>
       <Fonts />
       {showUpgrade && <UpgradeModal user={user} onUpgrade={upgrade} onClose={() => setShowUpgrade(false)} />}
-      <ProExpiryBanner user={user} onUpgradeClick={() => setShowUpgrade(true)} />
+      
       {showShopManager && <ShopManager user={user} shops={shops} setShops={setShops} onClose={() => setShowShopManager(false)} />}
       <div style={{ width: 230, background: C.surface, borderRight: `1px solid ${C.border}`, display: "flex", flexDirection: "column", position: "fixed", height: "100vh", zIndex: 50 }}>
         <div style={{ padding: "24px 20px 16px", borderBottom: `1px solid ${C.border}` }}>
