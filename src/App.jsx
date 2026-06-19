@@ -2314,8 +2314,9 @@ function AppShell({ user: initialUser, onLogout }) {
     <div style={{ minHeight: "100vh", background: C.bg, display: "flex", fontFamily: C.font }}>
       <Fonts />
       {showUpgrade && <UpgradeModal user={user} onUpgrade={upgrade} onClose={() => setShowUpgrade(false)} />}
-      
+
       {showShopManager && <ShopManager user={user} shops={shops} setShops={setShops} onClose={() => setShowShopManager(false)} />}
+      <ProExpiryBanner user={user} onUpgradeClick={() => setShowUpgrade(true)} />
       <div style={{ width: 230, background: C.surface, borderRight: `1px solid ${C.border}`, display: "flex", flexDirection: "column", position: "fixed", height: "100vh", zIndex: 50 }}>
         <div style={{ padding: "24px 20px 16px", borderBottom: `1px solid ${C.border}` }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
