@@ -2246,7 +2246,7 @@ function AppShell({ user: initialUser, onLogout }) {
       <div style={{ background: C.surface, borderBottom: `1px solid ${C.border}`, padding: "14px 16px", display: "flex", justifyContent: "space-between", alignItems: "center", position: "sticky", top: 0, zIndex: 100 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <div style={{ width: 28, height: 28, background: C.accent, borderRadius: 7, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14 }}>🌍</div>
-          <div style={{ fontFamily: C.display, fontSize: 16, fontWeight: 900, color: C.accent }}>BizOS<div onClick={() => { if (userId === "xdkc96BUoJhgb2j5t2A9aoXLtpW2") setNav("admin"); }} style={{ fontFamily: C.display, fontSize: 16, fontWeight: 900, color: C.accent, cursor: "pointer" }}>BizOS</div>
+    <div onClick={() => { if (userId === "xdkc96BUoJhgb2j5t2A9aoXLtpW2") setNav("admin"); }} style={{ fontFamily: C.display, fontSize: 16, fontWeight: 900, color: C.accent, cursor: "pointer" }}>BizOS</div>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           {shops.length > 1 && (
