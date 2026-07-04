@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { initializeApp } from "firebase/app";
-import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged, sendPasswordResetEmail } from "firebase/auth";
+import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged, sendPasswordResetEmail, sendEmailVerification } from "firebase/auth";
 import { getFirestore, doc, setDoc, getDoc, updateDoc, collection, getDocs, query, where } from "firebase/firestore";
 
 // ── FIREBASE CONFIG ───────────────────────────────────────────────────────────
@@ -581,6 +581,7 @@ function Auth({ onAuth }) {
   const [loading, setLoading] = useState(false);
   const [showPass, setShowPass] = useState(false);
   const [resetSent, setResetSent] = useState(false);
+  const [verifying, setVerifying] = useState(false);
   const f = k => v => setForm(p => ({ ...p, [k]: v }));
 
   async function forgotPassword() {
@@ -608,19 +609,54 @@ function Auth({ onAuth }) {
           localStorage.removeItem("bizos_ref");
         }
         
-        onAuth(userData);
+        await sendEmailVerification(cred.user);
+setVerifying(true);
       } else {
         if (!form.email || !form.pass) { setErr("Enter email and password."); setLoading(false); return; }
         const cred = await signInWithEmailAndPassword(auth, form.email, form.pass);
-        const profile = await getUserProfile(cred.user.uid);
-        onAuth({ ...profile, id: cred.user.uid });
+        if (!cred.user.emailVerified) {
+  await sendEmailVerification(cred.user);
+  setVerifying(true);
+  setLoading(false);
+  return;
+}
+const profile = await getUserProfile(cred.user.uid);
+onAuth({ ...profile, id: cred.user.uid });
       }
     } catch (e) {
       setErr(e.code === "auth/email-already-in-use" ? "Account exists. Login instead." : e.code === "auth/wrong-password" || e.code === "auth/user-not-found" ? "Wrong email or password." : e.message);
     }
     setLoading(false);
   }
-
+if (verifying) return (
+  <div style={{ minHeight: "100vh", background: C.bg, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: C.font, padding: 24 }}>
+    <div style={{ background: C.surface, borderRadius: 16, padding: 32, maxWidth: 400, width: "100%", textAlign: "center", boxShadow: "0 4px 24px rgba(0,0,0,0.08)" }}>
+      <div style={{ fontSize: 48, marginBottom: 16 }}>📧</div>
+      <h2 style={{ fontFamily: C.display, fontWeight: 900, fontSize: 22, marginBottom: 8 }}>Check your email</h2>
+      <p style={{ color: C.muted, fontSize: 14, lineHeight: 1.6, marginBottom: 24 }}>
+        We sent a verification link to <strong>{form.email}</strong>. Click the link in the email, then come back here and log in.
+      </p>
+      <Btn full onClick={() => { setVerifying(false); setMode("login"); }}>
+        I've verified my email → Login
+      </Btn>
+      <button
+        onClick={async () => {
+          try {
+            const cred = await signInWithEmailAndPassword(auth, form.email, form.pass);
+            await sendEmailVerification(cred.user);
+            alert("Verification email resent! Check your inbox (and spam folder).");
+          } catch (e) {
+            alert("Could not resend. Try logging in again.");
+            setVerifying(false);
+          }
+        }}
+        style={{ marginTop: 12, background: "transparent", border: "none", color: C.muted, fontSize: 13, cursor: "pointer", textDecoration: "underline" }}
+      >
+        Resend verification email
+      </button>
+    </div>
+  </div>
+);
   return (
     <div style={{ minHeight: "100vh", background: C.bg, display: "flex", fontFamily: C.font }}>
       <Fonts />
@@ -2314,7 +2350,6 @@ function AppShell({ user: initialUser, onLogout }) {
     <div style={{ minHeight: "100vh", background: C.bg, display: "flex", fontFamily: C.font }}>
       <Fonts />
       {showUpgrade && <UpgradeModal user={user} onUpgrade={upgrade} onClose={() => setShowUpgrade(false)} />}
-
       {showShopManager && <ShopManager user={user} shops={shops} setShops={setShops} onClose={() => setShowShopManager(false)} />}
       <ProExpiryBanner user={user} onUpgradeClick={() => setShowUpgrade(true)} />
       <div style={{ width: 230, background: C.surface, borderRight: `1px solid ${C.border}`, display: "flex", flexDirection: "column", position: "fixed", height: "100vh", zIndex: 50 }}>
