@@ -2283,6 +2283,9 @@ function AppShell({ user: initialUser, onLogout }) {
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <div style={{ width: 28, height: 28, background: C.accent, borderRadius: 7, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14 }}>🌍</div>
     <div onClick={() => { if (userId === "xdkc96BUoJhgb2j5t2A9aoXLtpW2") setNav("admin"); }} style={{ fontFamily: C.display, fontSize: 16, fontWeight: 900, color: C.accent, cursor: "pointer" }}>BizOS</div>
+{activeShop && (
+  <div style={{ fontSize: 11, color: C.muted, fontWeight: 600, marginTop: 1 }}>{activeShop.name}</div>
+)}
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           {shops.length > 1 && (
@@ -2402,13 +2405,16 @@ export default function BizOS() {
     if (ref) localStorage.setItem("bizos_ref", ref);
 
     const unsub = onAuthStateChanged(auth, async (firebaseUser) => {
-      if (firebaseUser) {
-        const profile = await getUserProfile(firebaseUser.uid);
-        setUser({ ...profile, id: firebaseUser.uid });
-        setScreen("app");
-      } else {
-        setScreen("landing");
-      }
+  if (firebaseUser && firebaseUser.emailVerified) {
+    const profile = await getUserProfile(firebaseUser.uid);
+    setUser({ ...profile, id: firebaseUser.uid });
+    setScreen("app");
+  } else if (firebaseUser && !firebaseUser.emailVerified) {
+    setScreen("landing");
+  } else {
+    setScreen("landing");
+  }
+});
     });
     return unsub;
   }, []);
