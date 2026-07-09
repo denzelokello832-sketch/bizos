@@ -736,7 +736,7 @@ function Dashboard({ user, products, sales, customers, expenses, onNav }) {
   return (
     <div>
       <div style={{ marginBottom: 28 }}>
-        <h2 style={{ fontFamily: C.display, fontWeight: 900, fontSize: 26, margin: "0 0 4px" }}>Good day, {user.name?.split(" ")[0]} 👋</h2>
+  <h2 style={{ fontFamily: C.display, fontWeight: 900, fontSize: 26, margin: "0 0 4px", color: C.text }}>Good day, {user.name?.split(" ")[0]} 👋</h2>
         <p style={{ color: C.muted, fontSize: 14, margin: 0 }}>{user.business} · {fmtDate(today())}</p>
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 14, marginBottom: 24 }}>
