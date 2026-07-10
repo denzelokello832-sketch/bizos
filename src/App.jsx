@@ -2404,17 +2404,16 @@ export default function BizOS() {
     const ref = params.get("ref");
     if (ref) localStorage.setItem("bizos_ref", ref);
 
-    const unsub = onAuthStateChanged(auth, async (firebaseUser) => {
-  if (firebaseUser && firebaseUser.emailVerified) {
-    const profile = await getUserProfile(firebaseUser.uid);
-    setUser({ ...profile, id: firebaseUser.uid });
-    setScreen("app");
-  } else if (firebaseUser && !firebaseUser.emailVerified) {
-    setScreen("landing");
-  } else {
-    setScreen("landing");
-  }
-});
+   const unsub = onAuthStateChanged(auth, async (firebaseUser) => {
+      if (firebaseUser && firebaseUser.emailVerified) {
+        const profile = await getUserProfile(firebaseUser.uid);
+        setUser({ ...profile, id: firebaseUser.uid });
+        setScreen("app");
+      } else if (firebaseUser && !firebaseUser.emailVerified) {
+        setScreen("landing");
+      } else {
+        setScreen("landing");
+      }
     });
     return unsub;
   }, []);
