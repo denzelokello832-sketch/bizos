@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { initializeApp } from "firebase/app";
-import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged, sendPasswordResetEmail, sendEmailVerification } from "firebase/auth";
+import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged, sendPasswordResetEmail, sendEmailVerification, GoogleAuthProvider, signInWithPopup } from "firebase/auth";
 import { getFirestore, doc, setDoc, getDoc, updateDoc, collection, getDocs, query, where } from "firebase/firestore";
 
 // ── FIREBASE CONFIG ───────────────────────────────────────────────────────────
@@ -593,6 +593,38 @@ function Auth({ onAuth }) {
     } catch (e) { setErr("Could not send reset email. Check your email address."); }
   }
 
+async function googleSignIn() {
+  setErr(""); setLoading(true);
+  try {
+    const provider = new GoogleAuthProvider();
+    const cred = await signInWithPopup(auth, provider);
+    
+    // Check if user already exists in Firestore
+    let profile = await getUserProfile(cred.user.uid);
+    
+    // If new user, create their profile
+    if (!profile.id) {
+      const userData = {
+        id: cred.user.uid,
+        name: cred.user.displayName || "",
+        business: "",
+        phone: "",
+        email: cred.user.email,
+        currency: "KSh",
+        isPro: false,
+        createdAt: today(),
+      };
+      await setDoc(doc(db, "users", cred.user.uid), userData);
+      profile = userData;
+    }
+    
+    onAuth({ ...profile, id: cred.user.uid });
+  } catch (e) {
+    setErr(e.code === "auth/popup-closed-by-user" ? "Sign-in cancelled." : e.message);
+  }
+  setLoading(false);
+}
+
   async function submit() {
     setErr(""); setLoading(true);
     try {
@@ -705,6 +737,15 @@ if (verifying) return (
           </div>
           {resetSent && <div style={{ color: C.accent, fontSize: 13, marginBottom: 14, background: C.accentLight, padding: "10px 14px", borderRadius: 8 }}>✅ Password reset email sent! Check your inbox.</div>}
           {err && <div style={{ color: C.red, fontSize: 13, marginBottom: 14, background: C.redLight, padding: "10px 14px", borderRadius: 8 }}>{err}</div>}
+          <button
+  onClick={googleSignIn}
+  disabled={loading}
+  style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 10, padding: "12px 20px", marginBottom: 12, border: `1.5px solid ${C.border}`, borderRadius: 10, background: "#fff", cursor: loading ? "not-allowed" : "pointer", fontFamily: C.font, fontSize: 14, fontWeight: 600, color: C.text }}
+>
+  <img src="https://www.google.com/favicon.ico" width={18} height={18} />
+  Continue with Google
+</button>
+<div style={{ textAlign: "center", fontSize: 12, color: C.muted, marginBottom: 12 }}>or</div>
           <Btn full onClick={submit} size="lg" disabled={loading}>{loading ? "Please wait..." : mode === "signup" ? "Create Account →" : "Login →"}</Btn>
           {mode === "login" && (
             <p style={{ textAlign: "center", fontSize: 13, color: C.muted, marginTop: 12 }}>
