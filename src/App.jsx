@@ -582,6 +582,7 @@ function Auth({ onAuth }) {
   const [showPass, setShowPass] = useState(false);
   const [resetSent, setResetSent] = useState(false);
   const [verifying, setVerifying] = useState(false);
+  const [newGoogleUser, setNewGoogleUser] = useState(null);
   const f = k => v => setForm(p => ({ ...p, [k]: v }));
 
   async function forgotPassword() {
@@ -593,31 +594,18 @@ function Auth({ onAuth }) {
     } catch (e) { setErr("Could not send reset email. Check your email address."); }
   }
 
-async function googleSignIn() {
+  async function googleSignIn() {
   setErr(""); setLoading(true);
   try {
     const provider = new GoogleAuthProvider();
     const cred = await signInWithPopup(auth, provider);
-    
-    // Check if user already exists in Firestore
     let profile = await getUserProfile(cred.user.uid);
-    
-    // If new user, create their profile
     if (!profile.id) {
-      const userData = {
-        id: cred.user.uid,
-        name: cred.user.displayName || "",
-        business: "",
-        phone: "",
-        email: cred.user.email,
-        currency: "KSh",
-        isPro: false,
-        createdAt: today(),
-      };
-      await setDoc(doc(db, "users", cred.user.uid), userData);
-      profile = userData;
+      // New user — show onboarding
+      setNewGoogleUser(cred.user);
+      setLoading(false);
+      return;
     }
-    
     onAuth({ ...profile, id: cred.user.uid });
   } catch (e) {
     setErr(e.code === "auth/popup-closed-by-user" ? "Sign-in cancelled." : e.message);
@@ -660,7 +648,54 @@ onAuth({ ...profile, id: cred.user.uid });
     }
     setLoading(false);
   }
+if (newGoogleUser) return (
+  <div style={{ minHeight: "100vh", background: C.bg, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: C.font, padding: 24 }}>
+    <div style={{ background: C.surface, borderRadius: 16, padding: 32, maxWidth: 400, width: "100%", boxShadow: "0 4px 24px rgba(0,0,0,0.08)" }}>
+      <div style={{ fontSize: 40, marginBottom: 12, textAlign: "center" }}>🏪</div>
+      <h2 style={{ fontFamily: C.display, fontWeight: 900, fontSize: 22, marginBottom: 8, textAlign: "center" }}>One last thing</h2>
+      <p style={{ color: C.muted, fontSize: 14, lineHeight: 1.6, marginBottom: 24, textAlign: "center" }}>
+        Tell us about your business so we can set up BizOS for you.
+      </p>
+      <Input label="Business Name *" value={form.business} onChange={f("business")} placeholder="Amara's Shop" />
+      <Input label="Your Name *" value={form.name} onChange={f("name")} placeholder="Amara Wanjiku" />
+      <Input label="Phone" value={form.phone} onChange={f("phone")} placeholder="+254 700 000 000" />
+      <Select label="Currency" value={form.currency} onChange={f("currency")} options={[
+        { value: "KSh", label: "KSh — Kenyan Shilling" },
+        { value: "₦", label: "₦ — Nigerian Naira" },
+        { value: "GH₵", label: "GH₵ — Ghanaian Cedi" },
+        { value: "$", label: "$ — US Dollar" },
+      ]} />
+      <Btn full size="lg" disabled={loading} onClick={async () => {
+        if (!form.business || !form.name) return setErr("Enter your business name and your name.");
+        setLoading(true);
+        const userData = {
+          id: newGoogleUser.uid,
+          name: form.name,
+          business: form.business,
+          phone: form.phone,
+          email: newGoogleUser.email,
+          currency: form.currency,
+          isPro: false,
+          createdAt: today(),
+        };
+        await setDoc(doc(db, "users", newGoogleUser.uid), userData);
+        const refCode = getRefCode();
+        if (refCode) {
+          await saveReferral(refCode, newGoogleUser.uid, newGoogleUser.email, form.name);
+          localStorage.removeItem("bizos_ref");
+        }
+        onAuth(userData);
+        setLoading(false);
+      }}>
+        {loading ? "Setting up..." : "Start using BizOS →"}
+      </Btn>
+      {err && <div style={{ color: C.red, fontSize: 13, marginTop: 12, background: C.redLight, padding: "10px 14px", borderRadius: 8 }}>{err}</div>}
+    </div>
+  </div>
+);
+
 if (verifying) return (
+
   <div style={{ minHeight: "100vh", background: C.bg, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: C.font, padding: 24 }}>
     <div style={{ background: C.surface, borderRadius: 16, padding: 32, maxWidth: 400, width: "100%", textAlign: "center", boxShadow: "0 4px 24px rgba(0,0,0,0.08)" }}>
       <div style={{ fontSize: 48, marginBottom: 16 }}>📧</div>
@@ -686,6 +721,51 @@ if (verifying) return (
       >
         Resend verification email
       </button>
+    </div>
+  </div>
+);
+if (newGoogleUser) return (
+  <div style={{ minHeight: "100vh", background: C.bg, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: C.font, padding: 24 }}>
+    <div style={{ background: C.surface, borderRadius: 16, padding: 32, maxWidth: 400, width: "100%", boxShadow: "0 4px 24px rgba(0,0,0,0.08)" }}>
+      <div style={{ fontSize: 40, marginBottom: 12, textAlign: "center" }}>🏪</div>
+      <h2 style={{ fontFamily: C.display, fontWeight: 900, fontSize: 22, marginBottom: 8, textAlign: "center" }}>One last thing</h2>
+      <p style={{ color: C.muted, fontSize: 14, lineHeight: 1.6, marginBottom: 24, textAlign: "center" }}>
+        Tell us about your business so we can set up BizOS for you.
+      </p>
+      <Input label="Business Name *" value={form.business} onChange={f("business")} placeholder="Amara's Shop" />
+      <Input label="Your Name *" value={form.name} onChange={f("name")} placeholder="Amara Wanjiku" />
+      <Input label="Phone" value={form.phone} onChange={f("phone")} placeholder="+254 700 000 000" />
+      <Select label="Currency" value={form.currency} onChange={f("currency")} options={[
+        { value: "KSh", label: "KSh — Kenyan Shilling" },
+        { value: "₦", label: "₦ — Nigerian Naira" },
+        { value: "GH₵", label: "GH₵ — Ghanaian Cedi" },
+        { value: "$", label: "$ — US Dollar" },
+      ]} />
+      <Btn full size="lg" disabled={loading} onClick={async () => {
+        if (!form.business || !form.name) return setErr("Enter your business name and your name.");
+        setLoading(true);
+        const userData = {
+          id: newGoogleUser.uid,
+          name: form.name,
+          business: form.business,
+          phone: form.phone,
+          email: newGoogleUser.email,
+          currency: form.currency,
+          isPro: false,
+          createdAt: today(),
+        };
+        await setDoc(doc(db, "users", newGoogleUser.uid), userData);
+        const refCode = getRefCode();
+        if (refCode) {
+          await saveReferral(refCode, newGoogleUser.uid, newGoogleUser.email, form.name);
+          localStorage.removeItem("bizos_ref");
+        }
+        onAuth(userData);
+        setLoading(false);
+      }}>
+        {loading ? "Setting up..." : "Start using BizOS →"}
+      </Btn>
+      {err && <div style={{ color: C.red, fontSize: 13, marginTop: 12, background: C.redLight, padding: "10px 14px", borderRadius: 8 }}>{err}</div>}
     </div>
   </div>
 );
