@@ -600,7 +600,7 @@ function Auth({ onAuth }) {
     const provider = new GoogleAuthProvider();
     const cred = await signInWithPopup(auth, provider);
     let profile = await getUserProfile(cred.user.uid);
-    if (!profile.id) {
+    if (!profile.business) {
       // New user — show onboarding
       setNewGoogleUser(cred.user);
       setLoading(false);
