@@ -2220,6 +2220,60 @@ function AdminPage({ currentUserId }) {
     </div>
   );
 }
+function Onboarding({ firebaseUser, onDone }) {
+  const [form, setForm] = useState({ name: firebaseUser.displayName || "", business: "", phone: "", currency: "KSh" });
+  const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState("");
+  const f = k => v => setForm(p => ({ ...p, [k]: v }));
+
+  async function save() {
+    if (!form.business || !form.name) return setErr("Enter your name and business name.");
+    setLoading(true);
+    const userData = {
+      id: firebaseUser.uid,
+      name: form.name,
+      business: form.business,
+      phone: form.phone,
+      email: firebaseUser.email,
+      currency: form.currency,
+      isPro: false,
+      createdAt: today(),
+    };
+    await setDoc(doc(db, "users", firebaseUser.uid), userData);
+    const refCode = getRefCode();
+    if (refCode) {
+      await saveReferral(refCode, firebaseUser.uid, firebaseUser.email, form.name);
+      localStorage.removeItem("bizos_ref");
+    }
+    onDone(userData);
+    setLoading(false);
+  }
+
+  return (
+    <div style={{ minHeight: "100vh", background: C.bg, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: C.font, padding: 24 }}>
+      <div style={{ background: C.surface, borderRadius: 16, padding: 32, maxWidth: 400, width: "100%", boxShadow: "0 4px 24px rgba(0,0,0,0.08)" }}>
+        <div style={{ fontSize: 40, marginBottom: 12, textAlign: "center" }}>🏪</div>
+        <h2 style={{ fontFamily: C.display, fontWeight: 900, fontSize: 22, marginBottom: 8, textAlign: "center", color: C.text }}>One last thing</h2>
+        <p style={{ color: C.muted, fontSize: 14, lineHeight: 1.6, marginBottom: 24, textAlign: "center" }}>
+          Tell us about your business so we can set up BizOS for you.
+        </p>
+        <Input label="Your Name *" value={form.name} onChange={f("name")} placeholder="Amara Wanjiku" />
+        <Input label="Business Name *" value={form.business} onChange={f("business")} placeholder="Amara's Shop" />
+        <Input label="Phone" value={form.phone} onChange={f("phone")} placeholder="+254 700 000 000" />
+        <Select label="Currency" value={form.currency} onChange={f("currency")} options={[
+          { value: "KSh", label: "KSh — Kenyan Shilling" },
+          { value: "₦", label: "₦ — Nigerian Naira" },
+          { value: "GH₵", label: "GH₵ — Ghanaian Cedi" },
+          { value: "$", label: "$ — US Dollar" },
+        ]} />
+        {err && <div style={{ color: C.red, fontSize: 13, marginBottom: 12, background: C.redLight, padding: "10px 14px", borderRadius: 8 }}>{err}</div>}
+        <Btn full size="lg" onClick={save} disabled={loading}>
+          {loading ? "Setting up..." : "Start using BizOS →"}
+        </Btn>
+      </div>
+    </div>
+  );
+}
 function AppShell({ user: initialUser, onLogout }) {
   const [user, setUser] = useState(initialUser);
   const [nav, setNav] = useState("dashboard");
