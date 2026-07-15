@@ -600,7 +600,7 @@ function Auth({ onAuth }) {
     const provider = new GoogleAuthProvider();
     const cred = await signInWithPopup(auth, provider);
     let profile = await getUserProfile(cred.user.uid);
-    if (!profile.business) {
+    if (!profile.business) { 
       // New user — show onboarding
       setNewGoogleUser(cred.user);
       setLoading(false);
@@ -2518,24 +2518,29 @@ function AppShell({ user: initialUser, onLogout }) {
 export default function BizOS() {
   const [screen, setScreen] = useState("loading");
   const [user, setUser] = useState(null);
+const [pendingUser, setPendingUser] = useState(null);
 
   useEffect(() => {
     // Save ref code from URL to localStorage
     const params = new URLSearchParams(window.location.search);
     const ref = params.get("ref");
     if (ref) localStorage.setItem("bizos_ref", ref);
-
-   const unsub = onAuthStateChanged(auth, async (firebaseUser) => {
-      if (firebaseUser && firebaseUser.emailVerified) {
-        const profile = await getUserProfile(firebaseUser.uid);
-        setUser({ ...profile, id: firebaseUser.uid });
-        setScreen("app");
-      } else if (firebaseUser && !firebaseUser.emailVerified) {
-        setScreen("landing");
-      } else {
-        setScreen("landing");
-      }
-    });
+const unsub = onAuthStateChanged(auth, async (firebaseUser) => {
+  if (firebaseUser && firebaseUser.emailVerified) {
+    const profile = await getUserProfile(firebaseUser.uid);
+    if (!profile.business) {
+      setPendingUser(firebaseUser);
+      setScreen("onboarding");
+    } else {
+      setUser({ ...profile, id: firebaseUser.uid });
+      setScreen("app");
+    }
+  } else if (firebaseUser && !firebaseUser.emailVerified) {
+    setScreen("landing");
+  } else {
+    setScreen("landing");
+  }
+});
     return unsub;
   }, []);
 
@@ -2543,6 +2548,7 @@ export default function BizOS() {
   if (screen === "affiliate") return <AffiliateSignup onBack={() => setScreen("landing")} />;
   if (screen === "landing") return <Landing onStart={() => setScreen("auth")} onAffiliate={() => setScreen("affiliate")} />;
   if (screen === "auth") return <Auth onAuth={(u) => { setUser(u); setScreen("app"); }} />;
+  if (screen === "onboarding" && pendingUser) return <Onboarding firebaseUser={pendingUser} onDone={(userData) => { setUser(userData); setScreen("app"); }} />;
   if (screen === "app" && user) return <AppShell user={user} onLogout={() => { setUser(null); setScreen("landing"); }} />;
   return null;
 }
