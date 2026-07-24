@@ -529,7 +529,7 @@ function Landing({ onStart, onAffiliate }) {
           <div style={{ width: 32, height: 32, background: C.accent, borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16 }}>🌍</div>
           <div style={{ fontFamily: C.display, fontSize: 20, fontWeight: 900 }}>BizOS</div>
         </div>
-        <div style={{ display: "flex", gap: 8 }}>
+        <div style={{ display: "flex", gap: 8,flexWrap:"wrap" }}>
           <Btn variant="ghost" onClick={onAffiliate} size="sm" style={{ color: C.accentBright, borderColor: `${C.accentBright}40` }}>💰 Earn</Btn>
           <Btn variant="ghost" onClick={onStart} size="sm" style={{ color: "#fff", borderColor: "rgba(255,255,255,0.2)" }}>Login</Btn>
           <Btn onClick={onStart} size="sm" style={{ background: C.accentBright, color: "#000" }}>Start Free</Btn>
@@ -2455,7 +2455,7 @@ function AppShell({ user: initialUser, onLogout }) {
 
       {/* Mobile top bar */}
       <div style={{ background: C.surface, borderBottom: `1px solid ${C.border}`, padding: "14px 16px", display: "flex", justifyContent: "space-between", alignItems: "center", position: "sticky", top: 0, zIndex: 100 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
           <div style={{ width: 28, height: 28, background: C.accent, borderRadius: 7, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14 }}>🌍</div>
     <div onClick={() => { if (userId === "xdkc96BUoJhgb2j5t2A9aoXLtpW2") setNav("admin"); }} style={{ fontFamily: C.display, fontSize: 16, fontWeight: 900, color: C.accent, cursor: "pointer" }}>BizOS</div>
 {activeShop && (
