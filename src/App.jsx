@@ -41,7 +41,7 @@ const getRefCode = () => {
 };
 
 // ── FIREBASE HELPERS ──────────────────────────────────────────────────────────
-async function saveUserData(userId, key, data) {
+async function saveUserData(dataUserId, key, data) {
   try {
     await setDoc(doc(db, "users", userId, "data", key), { value: JSON.stringify(data), updatedAt: now() });
   } catch (e) { console.error("Save error:", e); }
@@ -76,7 +76,7 @@ async function getShops(userId) {
   } catch (e) { return []; }
 }
 
-async function saveShops(userId, shops) {
+async function saveShops(dataUserId, shops) {
   try {
     await setDoc(doc(db, "users", userId, "meta", "shops"), { list: shops, updatedAt: now() });
   } catch (e) { console.error("Save shops error:", e); }
@@ -1691,10 +1691,7 @@ setMpesaRef("");
                     <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>{fmtDate(sale.date)} · {sale.payMethod}</div>
                   </div>
                   <div style={{ fontFamily: C.mono, fontWeight: 900, fontSize: 18, color: C.accent }}>{fmt(sale.total, curr)}</div>
-                  <div style={{ fontFamily: C.mono, fontWeight: 900, fontSize: 18, color: C.accent }}>{fmt(sale.total, curr)}</div>
-{!sale.isRefund && (
-  <Btn size="sm" variant="danger" onClick={() => processRefund(sale)}>↩ Refund</Btn>
-)}
+                  
                 </Card>
               );
             })}
@@ -2070,6 +2067,8 @@ function FeedbackForm({ user }) {
 // SHOP MANAGER
 // ══════════════════════════════════════════════════════
 function ShopManager({ user, shops, setShops, onClose }) {
+  const [inviteCode, setInviteCode] = useState("");
+const [generatingCode, setGeneratingCode] = useState(false);
   const [form, setForm] = useState({ name: "", currency: "KSh" });
   const f = k => v => setForm(p => ({ ...p, [k]: v }));
   const canAdd = user.isPro || shops.length < 2;
@@ -2087,6 +2086,13 @@ function ShopManager({ user, shops, setShops, onClose }) {
       setShops(prev => prev.filter(s => s.id !== id));
     }
   }
+
+  async function generateInvite() {
+  setGeneratingCode(true);
+  const code = await createStaffInvite(user.id, shops[0].id);
+  setInviteCode(code);
+  setGeneratingCode(false);
+}
 
   return (
     <Modal title="Manage Shops" onClose={onClose} width={500}>
@@ -2119,6 +2125,26 @@ function ShopManager({ user, shops, setShops, onClose }) {
           <p style={{ color: C.muted, fontSize: 13 }}>Business plan includes up to 5 shops.</p>
         </Card>
       )}
+      <div style={{ marginTop: 24, borderTop: `1px solid ${C.border}`, paddingTop: 20 }}>
+  <div style={{ fontFamily: C.display, fontWeight: 700, fontSize: 15, marginBottom: 8 }}>👥 Staff Access</div>
+  <p style={{ fontSize: 13, color: C.muted, marginBottom: 12 }}>Generate a code for your employee to join your shop. Code expires in 24 hours.</p>
+  {inviteCode ? (
+    <div>
+      <div style={{ background: C.accentLight, border: `1px solid ${C.accent}`, borderRadius: 10, padding: "16px", textAlign: "center", marginBottom: 12 }}>
+        <div style={{ fontSize: 11, color: C.accent, fontWeight: 700, marginBottom: 4 }}>STAFF INVITE CODE</div>
+        <div style={{ fontFamily: C.mono, fontSize: 36, fontWeight: 900, color: C.accent, letterSpacing: 8 }}>{inviteCode}</div>
+        <div style={{ fontSize: 11, color: C.muted, marginTop: 4 }}>Valid for 24 hours</div>
+      </div>
+      <Btn full variant="secondary" onClick={() => { navigator.clipboard.writeText(inviteCode); alert("Code copied!"); }}>
+        📋 Copy Code
+      </Btn>
+    </div>
+  ) : (
+    <Btn full onClick={generateInvite} disabled={generatingCode}>
+      {generatingCode ? "Generating..." : "Generate Staff Code"}
+    </Btn>
+  )}
+</div>
     </Modal>
   );
 }
@@ -2293,6 +2319,9 @@ function AdminPage({ currentUserId }) {
   );
 }
 function Onboarding({ firebaseUser, onDone }) {
+  const [joinCode, setJoinCode] = useState("");
+const [joining, setJoining] = useState(false);
+const [joinMode, setJoinMode] = useState(false);
   const [form, setForm] = useState({ name: firebaseUser.displayName || "", business: "", phone: "", currency: "KSh" });
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
@@ -2342,6 +2371,54 @@ function Onboarding({ firebaseUser, onDone }) {
         <Btn full size="lg" onClick={save} disabled={loading}>
           {loading ? "Setting up..." : "Start using BizOS →"}
         </Btn>
+        <div style={{ textAlign: "center", marginTop: 16 }}>
+  {!joinMode ? (
+    <span style={{ fontSize: 13, color: C.muted, cursor: "pointer", textDecoration: "underline" }} onClick={() => setJoinMode(true)}>
+      I'm an employee — join a shop instead
+    </span>
+  ) : (
+    <div>
+      <div style={{ fontSize: 13, fontWeight: 600, color: C.muted, marginBottom: 8 }}>Enter the code your employer gave you:</div>
+      <input
+        value={joinCode}
+        onChange={e => setJoinCode(e.target.value)}
+        placeholder="e.g. 4821"
+        maxLength={4}
+        style={{ width: "100%", boxSizing: "border-box", border: `1.5px solid ${C.border}`, borderRadius: 10, padding: "10px 14px", fontFamily: C.mono, fontSize: 24, textAlign: "center", letterSpacing: 8, marginBottom: 10, outline: "none" }}
+      />
+      <Btn full disabled={joining || joinCode.length !== 4} onClick={async () => {
+        setJoining(true);
+        const result = await acceptStaffInvite(joinCode, firebaseUser.uid);
+        if (result.error) {
+          setErr(result.error);
+          setJoining(false);
+          return;
+        }
+        const profile = await getUserProfile(firebaseUser.uid);
+        if (!profile.id) {
+          await setDoc(doc(db, "users", firebaseUser.uid), {
+            id: firebaseUser.uid,
+            name: firebaseUser.displayName || "",
+            email: firebaseUser.email,
+            business: "",
+            currency: "KSh",
+            isPro: false,
+            createdAt: today(),
+          });
+        }
+        onDone({ id: firebaseUser.uid, email: firebaseUser.email, staffAccess: { ownerId: result.ownerId, shopId: result.shopId } });
+        setJoining(false);
+      }}>
+        {joining ? "Joining..." : "Join Shop →"}
+      </Btn>
+      <div style={{ marginTop: 8 }}>
+        <span style={{ fontSize: 12, color: C.muted, cursor: "pointer", textDecoration: "underline" }} onClick={() => setJoinMode(false)}>
+          ← Back
+        </span>
+      </div>
+    </div>
+  )}
+</div>
       </div>
     </div>
   );
@@ -2361,6 +2438,9 @@ function AppShell({ user: initialUser, onLogout }) {
   const [customers, setCustomersState] = useState([]);
   const [expenses, setExpensesState] = useState([]);
   const userId = user.id;
+  const isStaff = !!user.staffAccess;
+const dataUserId = user.staffAccess?.ownerId || user.id;
+const dataShopId = user.staffAccess?.shopId || null;
 
   useEffect(() => {
     const handleResize = () => setIsMobile(window.innerWidth < 768);
@@ -2379,7 +2459,7 @@ function AppShell({ user: initialUser, onLogout }) {
       if (!shopList || shopList.length === 0) {
         const defaultShop = { id: uid(), name: profile.business || "My Shop", currency: profile.currency || "KSh", createdAt: today() };
         finalShops = [defaultShop];
-        await saveShops(userId, finalShops);
+        await saveShops(dataUserId, finalShops);
       }
       setShopsState(finalShops);
       const shopId = finalShops[0].id;
@@ -2393,10 +2473,10 @@ function AppShell({ user: initialUser, onLogout }) {
       if (oldProducts && oldProducts.length > 0 && (!newProducts || newProducts.length === 0)) {
         // Migrate old data to new shop key
         await Promise.all([
-          saveUserData(userId, `products_${shopId}`, oldProducts),
-          saveUserData(userId, `sales_${shopId}`, await getUserData(userId, "sales", [])),
-          saveUserData(userId, `customers_${shopId}`, await getUserData(userId, "customers", [])),
-          saveUserData(userId, `expenses_${shopId}`, await getUserData(userId, "expenses", [])),
+          saveUserData(dataUserId, `products_${shopId}`, oldProducts),
+          saveUserData(dataUserId, `sales_${shopId}`, await getUserData(userId, "sales", [])),
+          saveUserData(dataUserId, `customers_${shopId}`, await getUserData(userId, "customers", [])),
+          saveUserData(dataUserId, `expenses_${shopId}`, await getUserData(userId, "expenses", [])),
         ]);
       }
 
@@ -2438,20 +2518,53 @@ function AppShell({ user: initialUser, onLogout }) {
   const setShops = (updater) => {
     setShopsState(prev => {
       const next = typeof updater === "function" ? updater(prev) : updater;
-      saveShops(userId, next);
+      saveShops(dataUserId, next);
       return next;
     });
   };
 
-  const setProducts = (updater) => setProductsState(prev => { const next = typeof updater === "function" ? updater(prev) : updater; saveUserData(userId, `products_${activeShopId}`, next); return next; });
-  const setSales = (updater) => setSalesState(prev => { const next = typeof updater === "function" ? updater(prev) : updater; saveUserData(userId, `sales_${activeShopId}`, next); return next; });
-  const setCustomers = (updater) => setCustomersState(prev => { const next = typeof updater === "function" ? updater(prev) : updater; saveUserData(userId, `customers_${activeShopId}`, next); return next; });
-  const setExpenses = (updater) => setExpensesState(prev => { const next = typeof updater === "function" ? updater(prev) : updater; saveUserData(userId, `expenses_${activeShopId}`, next); return next; });
+  const setProducts = (updater) => setProductsState(prev => { const next = typeof updater === "function" ? updater(prev) : updater; saveUserData(dataUserId, `products_${activeShopId}`, next); return next; });
+  const setSales = (updater) => setSalesState(prev => { const next = typeof updater === "function" ? updater(prev) : updater; saveUserData(dataUserId, `sales_${activeShopId}`, next); return next; });
+  const setCustomers = (updater) => setCustomersState(prev => { const next = typeof updater === "function" ? updater(prev) : updater; saveUserData(dataUserId, `customers_${activeShopId}`, next); return next; });
+  const setExpenses = (updater) => setExpensesState(prev => { const next = typeof updater === "function" ? updater(prev) : updater; saveUserData(dataUserId, `expenses_${activeShopId}`, next); return next; });
 
   async function upgrade() {
     const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
     await setUserPro(userId, true, expiresAt);
-    await markReferralPaid(userId);
+    await markReferralPaid(userId);async function createStaffInvite(ownerId, shopId) {
+  const code = Math.floor(1000 + Math.random() * 9000).toString();
+  await setDoc(doc(db, "invites", code), {
+    ownerId,
+    shopId,
+    createdAt: now(),
+    expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+  });
+  return code;
+}
+
+async function acceptStaffInvite(code, staffUserId) {
+  try {
+    const snap = await getDoc(doc(db, "invites", code));
+    if (!snap.exists()) return { error: "Invalid code. Check and try again." };
+    const invite = snap.data();
+    if (new Date(invite.expiresAt) < new Date()) return { error: "This code has expired. Ask the owner for a new one." };
+    await setDoc(doc(db, "staff", staffUserId), {
+      ownerId: invite.ownerId,
+      shopId: invite.shopId,
+      joinedAt: now(),
+    });
+    return { ownerId: invite.ownerId, shopId: invite.shopId };
+  } catch (e) {
+    return { error: "Could not join shop. Try again." };
+  }
+}
+
+async function getStaffAccess(userId) {
+  try {
+    const snap = await getDoc(doc(db, "staff", userId));
+    return snap.exists() ? snap.data() : null;
+  } catch (e) { return null; }
+}
     setUser(u => ({ ...u, isPro: true, proExpiresAt: expiresAt }));
     setShowUpgrade(false);
   }
@@ -2480,17 +2593,23 @@ function AppShell({ user: initialUser, onLogout }) {
   ];
 
   const PageContent = () => (
-    <>
-      {nav === "dashboard" && <Dashboard user={activeUser} products={products} sales={sales} customers={customers} expenses={expenses} onNav={setNav} />}
-      {nav === "inventory" && <Inventory products={products} setProducts={setProducts} user={activeUser} isPro={user.isPro} />}
-      {nav === "sales" && <Sales sales={sales} setSales={setSales} products={products} setProducts={setProducts} customers={customers} user={activeUser} />}
-      {nav === "customers" && <Customers customers={customers} setCustomers={setCustomers} sales={sales} user={activeUser} isPro={user.isPro} />}
-      {nav === "expenses" && <Expenses expenses={expenses} setExpenses={setExpenses} user={activeUser} />}
-      {nav === "ai" && <AIBrain user={activeUser} products={products} sales={sales} customers={customers} expenses={expenses} onUpgrade={() => setShowUpgrade(true)} />}
-      {nav === "feedback" && <FeedbackForm user={user} />}
-      {nav === "admin" && <AdminPage currentUserId={userId} />}
-    </>
-  );
+  <>
+    {isStaff ? (
+      <Sales sales={sales} setSales={setSales} products={products} setProducts={setProducts} customers={customers} user={activeUser} />
+    ) : (
+      <>
+        {nav === "dashboard" && <Dashboard user={activeUser} products={products} sales={sales} customers={customers} expenses={expenses} onNav={setNav} />}
+        {nav === "inventory" && <Inventory products={products} setProducts={setProducts} user={activeUser} isPro={user.isPro} />}
+        {nav === "sales" && <Sales sales={sales} setSales={setSales} products={products} setProducts={setProducts} customers={customers} user={activeUser} />}
+        {nav === "customers" && <Customers customers={customers} setCustomers={setCustomers} sales={sales} user={activeUser} isPro={user.isPro} />}
+        {nav === "expenses" && <Expenses expenses={expenses} setExpenses={setExpenses} user={activeUser} />}
+        {nav === "ai" && <AIBrain user={activeUser} products={products} sales={sales} customers={customers} expenses={expenses} onUpgrade={() => setShowUpgrade(true)} />}
+        {nav === "feedback" && <FeedbackForm user={user} />}
+        {nav === "admin" && <AdminPage currentUserId={userId} />}
+      </>
+    )}
+  </>
+);
 
   // Shop switcher component
   const ShopSwitcher = () => shops.length > 1 ? (
@@ -2658,7 +2777,9 @@ const unsub = onAuthStateChanged(auth, async (firebaseUser) => {
       setPendingUser(firebaseUser);
       setScreen("onboarding");
     } else {
-      setUser({ ...profile, id: firebaseUser.uid });
+      // Check if this user is a staff member
+      const staffAccess = await getStaffAccess(firebaseUser.uid);
+      setUser({ ...profile, id: firebaseUser.uid, staffAccess });
       setScreen("app");
     }
   } else if (firebaseUser && !firebaseUser.emailVerified) {
