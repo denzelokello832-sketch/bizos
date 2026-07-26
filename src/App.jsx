@@ -1532,6 +1532,8 @@ const [showQuickAdd, setShowQuickAdd] = useState(false);
 // SALES
 // ══════════════════════════════════════════════════════
 function Sales({ sales, setSales, products, setProducts, customers, user }) {
+  const [mpesaRef, setMpesaRef] = useState("");
+  const [showRefund, setShowRefund] = useState(null); // holds the sale being refunded
   const [showAdd, setShowAdd] = useState(false);
   const [cart, setCart] = useState([]);
   const [selectedCustomer, setSelectedCustomer] = useState("");
@@ -1561,7 +1563,8 @@ function Sales({ sales, setSales, products, setProducts, customers, user }) {
       const item = cart.find(i => i.productId === p.id);
       return item ? { ...p, qty: Math.max(0, p.qty - item.qty) } : p;
     }));
-    setSales(prev => [...prev, { id: uid(), items: cart, total: cartTotal, customerId: selectedCustomer, payMethod, date: today(), createdAt: now() }]);
+  setSales(prev => [...prev, { id: uid(), items: cart, total: cartTotal, customerId: selectedCustomer, payMethod, mpesaRef: payMethod === "mpesa" ? mpesaRef : "", date: today(), createdAt: now() }]);
+setMpesaRef("");
     setCart([]); setSelectedCustomer(""); setPayMethod("cash"); setShowAdd(false);
   }
 
@@ -1571,6 +1574,32 @@ function Sales({ sales, setSales, products, setProducts, customers, user }) {
     if (filter === "month") return s.date?.startsWith(thisMonth());
     return true;
   });
+
+  function processRefund(sale) {
+  if (!window.confirm(`Refund ${fmt(sale.total, curr)}? This will restore stock.`)) return;
+  // Restore stock for each item
+  setProducts(prev => prev.map(p => {
+    const item = sale.items?.find(i => i.productId === p.id);
+    return item ? { ...p, qty: p.qty + item.qty } : p;
+  }));
+  // Record as negative sale
+  setSales(prev => [...prev, {
+    id: uid(),
+    items: sale.items,
+    total: -sale.total,
+    customerId: sale.customerId,
+    payMethod: sale.payMethod,
+    date: today(),
+    createdAt: now(),
+    isRefund: true,
+    refundOf: sale.id,
+  }]);
+  alert("Refund processed. Stock restored.");
+}
+<div style={{ fontFamily: C.mono, fontWeight: 900, fontSize: 18, color: C.accent }}>{fmt(sale.total, curr)}</div>
+{!sale.isRefund && (
+  <Btn size="sm" variant="danger" onClick={() => processRefund(sale)}>↩ Refund</Btn>
+)}
 
   return (
     <div>
@@ -1634,6 +1663,15 @@ function Sales({ sales, setSales, products, setProducts, customers, user }) {
               </div>
               <Select label="Customer" value={selectedCustomer} onChange={setSelectedCustomer} options={[{ value: "", label: "Walk-in customer" }, ...customers.map(c => ({ value: c.id, label: c.name }))]} />
               <Select label="Payment" value={payMethod} onChange={setPayMethod} options={[{ value: "cash", label: "💵 Cash" }, { value: "mpesa", label: "📱 M-Pesa" }, { value: "transfer", label: "🏦 Bank Transfer" }, { value: "pos", label: "💳 POS" }]} />
+              <Select label="Payment" value={payMethod} onChange={setPayMethod} options={[{ value: "cash", label: "💵 Cash" }, { value: "mpesa", label: "📱 M-Pesa" }, { value: "transfer", label: "🏦 Bank Transfer" }, { value: "pos", label: "💳 POS" }]} />
+{payMethod === "mpesa" && (
+  <Input 
+    label="M-Pesa Code (optional)" 
+    value={mpesaRef} 
+    onChange={setMpesaRef} 
+    placeholder="e.g. QGH4XK2345" 
+  />
+)}
               <div style={{ background: C.accentLight, borderRadius: 10, padding: 14, marginBottom: 16, display: "flex", justifyContent: "space-between" }}>
                 <span style={{ fontWeight: 700, color: C.accent }}>Total</span>
                 <span style={{ fontFamily: C.mono, fontWeight: 900, fontSize: 20, color: C.accent }}>{fmt(cartTotal, curr)}</span>
@@ -1742,6 +1780,8 @@ function Customers({ customers, setCustomers, sales, user, isPro }) {
 // EXPENSES
 // ══════════════════════════════════════════════════════
 function Expenses({ expenses, setExpenses, user }) {
+  const [showCashFlow, setShowCashFlow] = useState(false);
+const [cashForm, setCashForm] = useState({ type: "in", amount: "", note: "", date: today() });
   const [showAdd, setShowAdd] = useState(false);
   const [form, setForm] = useState({ description: "", amount: "", category: "operations", date: today() });
   const f = k => v => setForm(p => ({ ...p, [k]: v }));
@@ -1755,6 +1795,20 @@ function Expenses({ expenses, setExpenses, user }) {
     setShowAdd(false);
   }
 
+  function addCashFlow() {
+  if (!cashForm.amount) return alert("Enter amount.");
+  setExpenses(prev => [...prev, {
+    id: uid(),
+    description: cashForm.type === "in" ? `Cash In — ${cashForm.note || "deposit"}` : `Cash Out — ${cashForm.note || "withdrawal"}`,
+    amount: cashForm.type === "in" ? -Number(cashForm.amount) : Number(cashForm.amount),
+    category: cashForm.type === "in" ? "cash_in" : "cash_out",
+    date: cashForm.date,
+    createdAt: now(),
+  }]);
+  setCashForm({ type: "in", amount: "", note: "", date: today() });
+  setShowCashFlow(false);
+}
+
   return (
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
@@ -1762,8 +1816,26 @@ function Expenses({ expenses, setExpenses, user }) {
           <h2 style={{ fontFamily: C.display, fontWeight: 900, fontSize: 24, margin: "0 0 4px" }}>Expenses</h2>
           <div style={{ color: C.muted, fontSize: 13 }}>This month: {fmt(total, curr)}</div>
         </div>
-        <Btn onClick={() => setShowAdd(true)}>+ Add Expense</Btn>
+        <div style={{ display: "flex", gap: 8 }}>
+  <Btn onClick={() => setShowAdd(true)}>+ Add Expense</Btn>
+  <Btn variant="secondary" onClick={() => setShowCashFlow(true)}>💵 Cash In/Out</Btn>
+</div>
       </div>
+      {showCashFlow && (
+  <Modal title="Record Cash Movement" onClose={() => setShowCashFlow(false)}>
+    <Select label="Type" value={cashForm.type} onChange={v => setCashForm(p => ({ ...p, type: v }))} options={[
+      { value: "in", label: "💰 Cash In (deposit to till)" },
+      { value: "out", label: "💸 Cash Out (withdrawal from till)" },
+    ]} />
+    <Input label="Amount (KSh) *" value={cashForm.amount} onChange={v => setCashForm(p => ({ ...p, amount: v }))} placeholder="5000" type="number" />
+    <Input label="Note (optional)" value={cashForm.note} onChange={v => setCashForm(p => ({ ...p, note: v }))} placeholder="e.g. paid supplier, owner withdrawal" />
+    <Input label="Date" value={cashForm.date} onChange={v => setCashForm(p => ({ ...p, date: v }))} type="date" />
+    <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
+      <Btn onClick={addCashFlow}>Save</Btn>
+      <Btn variant="ghost" onClick={() => setShowCashFlow(false)}>Cancel</Btn>
+    </div>
+  </Modal>
+)}
       {showAdd && (
         <Modal title="Add Expense" onClose={() => setShowAdd(false)}>
           <Input label="Description *" value={form.description} onChange={f("description")} placeholder="Generator fuel..." />
