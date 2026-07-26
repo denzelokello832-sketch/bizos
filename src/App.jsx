@@ -1596,10 +1596,6 @@ setMpesaRef("");
   }]);
   alert("Refund processed. Stock restored.");
 }
-<div style={{ fontFamily: C.mono, fontWeight: 900, fontSize: 18, color: C.accent }}>{fmt(sale.total, curr)}</div>
-{!sale.isRefund && (
-  <Btn size="sm" variant="danger" onClick={() => processRefund(sale)}>↩ Refund</Btn>
-)}
 
   return (
     <div>
@@ -1695,6 +1691,10 @@ setMpesaRef("");
                     <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>{fmtDate(sale.date)} · {sale.payMethod}</div>
                   </div>
                   <div style={{ fontFamily: C.mono, fontWeight: 900, fontSize: 18, color: C.accent }}>{fmt(sale.total, curr)}</div>
+                  <div style={{ fontFamily: C.mono, fontWeight: 900, fontSize: 18, color: C.accent }}>{fmt(sale.total, curr)}</div>
+{!sale.isRefund && (
+  <Btn size="sm" variant="danger" onClick={() => processRefund(sale)}>↩ Refund</Btn>
+)}
                 </Card>
               );
             })}
