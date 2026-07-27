@@ -179,6 +179,41 @@ async function markReferralPaid(userId) {
   } catch (e) { console.error("Mark paid error:", e); }
 }
 
+async function createStaffInvite(ownerId, shopId) {
+  const code = Math.floor(1000 + Math.random() * 9000).toString();
+  await setDoc(doc(db, "invites", code), {
+    ownerId,
+    shopId,
+    createdAt: now(),
+    expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+  });
+  return code;
+}
+
+async function acceptStaffInvite(code, staffUserId) {
+  try {
+    const snap = await getDoc(doc(db, "invites", code));
+    if (!snap.exists()) return { error: "Invalid code. Check and try again." };
+    const invite = snap.data();
+    if (new Date(invite.expiresAt) < new Date()) return { error: "This code has expired. Ask the owner for a new one." };
+    await setDoc(doc(db, "staff", staffUserId), {
+      ownerId: invite.ownerId,
+      shopId: invite.shopId,
+      joinedAt: now(),
+    });
+    return { ownerId: invite.ownerId, shopId: invite.shopId };
+  } catch (e) {
+    return { error: "Could not join shop. Try again." };
+  }
+}
+
+async function getStaffAccess(userId) {
+  try {
+    const snap = await getDoc(doc(db, "staff", userId));
+    return snap.exists() ? snap.data() : null;
+  } catch (e) { return null; }
+}
+
 // ── CLAUDE AI ─────────────────────────────────────────────────────────────────
 async function askAI(system, message) {
   try {
@@ -2528,43 +2563,10 @@ const dataShopId = user.staffAccess?.shopId || null;
   const setCustomers = (updater) => setCustomersState(prev => { const next = typeof updater === "function" ? updater(prev) : updater; saveUserData(dataUserId, `customers_${activeShopId}`, next); return next; });
   const setExpenses = (updater) => setExpensesState(prev => { const next = typeof updater === "function" ? updater(prev) : updater; saveUserData(dataUserId, `expenses_${activeShopId}`, next); return next; });
 
-  async function upgrade() {
+ async function upgrade() {
     const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
     await setUserPro(userId, true, expiresAt);
-    await markReferralPaid(userId);async function createStaffInvite(ownerId, shopId) {
-  const code = Math.floor(1000 + Math.random() * 9000).toString();
-  await setDoc(doc(db, "invites", code), {
-    ownerId,
-    shopId,
-    createdAt: now(),
-    expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
-  });
-  return code;
-}
-
-async function acceptStaffInvite(code, staffUserId) {
-  try {
-    const snap = await getDoc(doc(db, "invites", code));
-    if (!snap.exists()) return { error: "Invalid code. Check and try again." };
-    const invite = snap.data();
-    if (new Date(invite.expiresAt) < new Date()) return { error: "This code has expired. Ask the owner for a new one." };
-    await setDoc(doc(db, "staff", staffUserId), {
-      ownerId: invite.ownerId,
-      shopId: invite.shopId,
-      joinedAt: now(),
-    });
-    return { ownerId: invite.ownerId, shopId: invite.shopId };
-  } catch (e) {
-    return { error: "Could not join shop. Try again." };
-  }
-}
-
-async function getStaffAccess(userId) {
-  try {
-    const snap = await getDoc(doc(db, "staff", userId));
-    return snap.exists() ? snap.data() : null;
-  } catch (e) { return null; }
-}
+    await markReferralPaid(userId);
     setUser(u => ({ ...u, isPro: true, proExpiresAt: expiresAt }));
     setShowUpgrade(false);
   }
