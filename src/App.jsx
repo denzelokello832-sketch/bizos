@@ -2458,7 +2458,44 @@ const [joinMode, setJoinMode] = useState(false);
     </div>
   );
 }
+
+function JoinShopForm({ userId, onSuccess }) {
+  const [code, setCode] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState("");
+
+  async function join() {
+    if (code.length !== 4) return setErr("Enter a 4-digit code.");
+    setLoading(true);
+    const result = await acceptStaffInvite(code, userId);
+    if (result.error) {
+      setErr(result.error);
+      setLoading(false);
+      return;
+    }
+    onSuccess({ ownerId: result.ownerId, shopId: result.shopId });
+    setLoading(false);
+  }
+
+  return (
+    <div>
+      <input
+        value={code}
+        onChange={e => setCode(e.target.value)}
+        placeholder="e.g. 4821"
+        maxLength={4}
+        style={{ width: "100%", boxSizing: "border-box", border: `1.5px solid ${C.border}`, borderRadius: 10, padding: "10px 14px", fontFamily: C.mono, fontSize: 32, textAlign: "center", letterSpacing: 8, marginBottom: 12, outline: "none" }}
+      />
+      {err && <div style={{ color: C.red, fontSize: 13, marginBottom: 12, background: C.redLight, padding: "10px 14px", borderRadius: 8 }}>{err}</div>}
+      <Btn full onClick={join} disabled={loading || code.length !== 4}>
+        {loading ? "Joining..." : "Join Shop →"}
+      </Btn>
+    </div>
+  );
+}
+
 function AppShell({ user: initialUser, onLogout }) {
+  const [showJoinShop, setShowJoinShop] = useState(false);
   const [user, setUser] = useState(initialUser);
   const [nav, setNav] = useState("dashboard");
   const [showUpgrade, setShowUpgrade] = useState(false);
@@ -2681,8 +2718,12 @@ const dataShopId = user.staffAccess?.shopId || null;
               style={{ width: "100%", display: "flex", alignItems: "center", gap: 14, padding: "14px 12px", border: "none", borderRadius: 10, cursor: "pointer", fontFamily: C.font, fontWeight: 600, fontSize: 15, marginBottom: 4, background: C.faint, color: C.text }}>
               <span style={{ fontSize: 20 }}>🏪</span> Manage Shops
             </button>
+            <button onClick={() => { setShowJoinShop(true); setShowMobileMenu(false); }}
+  style={{ width: "100%", display: "flex", alignItems: "center", gap: 14, padding: "14px 12px", border: "none", borderRadius: 10, cursor: "pointer", fontFamily: C.font, fontWeight: 600, fontSize: 15, marginBottom: 4, background: C.faint, color: C.text }}>
+  <span style={{ fontSize: 20 }}>🔑</span> Join a Shop
+</button>
             {!user.isPro && (
-              <button onClick={() => { setShowUpgrade(true); setShowMobileMenu(false); }}
+             <button onClick={() => { setShowUpgrade(true); setShowMobileMenu(false); }}
                 style={{ width: "100%", background: C.gold, border: "none", borderRadius: 10, padding: "14px", color: "#fff", fontFamily: C.font, fontWeight: 700, fontSize: 15, cursor: "pointer", marginTop: 8 }}>
                 ⚡ Upgrade — KSh 1,500/mo
               </button>
@@ -2710,6 +2751,7 @@ const dataShopId = user.staffAccess?.shopId || null;
               <span style={{ fontSize: 10, fontFamily: C.font, fontWeight: isActive ? 700 : 500, color: isActive ? C.accent : C.muted }}>{n.label}</span>
               {isActive && <div style={{ width: 4, height: 4, borderRadius: "50%", background: C.accent }} />}
             </button>
+            
           );
         })}
       </div>
