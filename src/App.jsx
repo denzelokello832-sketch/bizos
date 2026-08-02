@@ -359,7 +359,7 @@ const Loader = ({ text = "Loading..." }) => (
 
 // ══════════════════════════════════════════════════════
 // AFFILIATE DASHBOARD
-// ══════════════════════════════════════════════════════
+//═════════════════════════════════════════════════════
 function AffiliateDashboard({ refCode, onBack }) {
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -888,7 +888,11 @@ function Dashboard({ user, products, sales, customers, expenses, onNav }) {
   const monthSales = sales.filter(s => s.date?.startsWith(thisMonth())).reduce((sum, s) => sum + s.total, 0);
   const lowStock = products.filter(p => p.qty <= (p.lowStockAlert || 5)).length;
   const recentSales = [...sales].sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || "")).slice(0, 5);
-
+const recentSales = [...sales].sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || "")).slice(0, 5);
+const todayCashSales = sales.filter(s => s.date === today() && s.payMethod === "cash" && !s.isRefund).reduce((sum, s) => sum + s.total, 0);
+const todayCashExpenses = expenses.filter(e => e.date === today() && e.category !== "cash_in").reduce((sum, e) => sum + Number(e.amount), 0);
+const todayCashIn = expenses.filter(e => e.date === today() && e.category === "cash_in").reduce((sum, e) => sum + Number(e.amount), 0);
+const tillBalance = todayCashSales - todayCashExpenses + todayCashIn;
   return (
     <div>
       <div style={{ marginBottom: 28 }}>
@@ -900,6 +904,7 @@ function Dashboard({ user, products, sales, customers, expenses, onNav }) {
         <Stat label="This Month" value={fmt(monthSales, curr)} sub="Total revenue" icon="📈" color={C.gold} />
         <Stat label="Customers" value={customers.length} sub="Total records" icon="👥" color={C.blue} />
         <Stat label="Low Stock" value={lowStock} sub={lowStock > 0 ? "Need restocking" : "All good"} icon="📦" color={lowStock > 0 ? C.red : C.accentBright} />
+          <Stat label="Till Balance" value={fmt(tillBalance, curr)} sub="Cash in till today" icon="🏧" color={tillBalance >= 0 ? C.accent : C.red} />
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr", gap: 20 }}>
         <Card>
