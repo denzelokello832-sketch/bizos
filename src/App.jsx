@@ -2634,10 +2634,12 @@ const dataShopId = user.staffAccess?.shopId || null;
   const PageContent = () => (
   <>
     {isStaff ? (
-      <>
-        {nav === "inventory" && <Inventory products={products} setProducts={setProducts} user={activeUser} isPro={true} />}
-        {nav !== "inventory" && <Sales sales={sales} setSales={setSales} products={products} setProducts={setProducts} customers={customers} user={activeUser} />}
-      </>
+  <>
+    {nav === "inventory" && <Inventory products={products} setProducts={setProducts} user={activeUser} isPro={true} />}
+    {nav === "expenses" && <Expenses expenses={expenses} setExpenses={setExpenses} user={activeUser} />}
+    {!["inventory", "expenses"].includes(nav) && <Sales sales={sales} setSales={setSales} products={products} setProducts={setProducts} customers={customers} user={activeUser} />}
+  </>
+
     ) : (
       <>
         {nav === "dashboard" && <Dashboard user={activeUser} products={products} sales={sales} customers={customers} expenses={expenses} onNav={setNav} />}
@@ -2757,17 +2759,26 @@ const dataShopId = user.staffAccess?.shopId || null;
       <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: C.surface, borderTop: `1px solid ${C.border}`, display: "flex", zIndex: 100 }}>
         {isStaff ? (
         <div style={{ display: "flex", width: "100%" }}>
-    <button onClick={() => setNav("sales")} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "10px 4px", border: "none", background: "transparent", cursor: "pointer", gap: 3 }}>
-      <span style={{ fontSize: 20 }}>💰</span>
-      <span style={{ fontSize: 10, fontFamily: C.font, fontWeight: nav !== "inventory" ? 700 : 500, color: nav !== "inventory" ? C.accent : C.muted }}>Sales</span>
-      {nav !== "inventory" && <div style={{ width: 4, height: 4, borderRadius: "50%", background: C.accent }} />}
-    </button>
-    <button onClick={() => setNav("inventory")} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "10px 4px", border: "none", background: "transparent", cursor: "pointer", gap: 3 }}>
-      <span style={{ fontSize: 20 }}>📦</span>
-      <span style={{ fontSize: 10, fontFamily: C.font, fontWeight: nav === "inventory" ? 700 : 500, color: nav === "inventory" ? C.accent : C.muted }}>Stock</span>
-      {nav === "inventory" && <div style={{ width: 4, height: 4, borderRadius: "50%", background: C.accent }} />}
-    </button>
-  </div>
+  <button onClick={() => setNav("sales")} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "10px 4px", border: "none", background: "transparent", cursor: "pointer", gap: 3 }}>
+    <span style={{ fontSize: 20 }}>💰</span>
+    <span style={{ fontSize: 10, fontFamily: C.font, fontWeight: nav === "sales" || !["inventory","expenses"].includes(nav) ? 700 : 500, color: nav === "sales" || !["inventory","expenses"].includes(nav) ? C.accent : C.muted }}>Sales</span>
+    {(nav === "sales" || !["inventory","expenses"].includes(nav)) && <div style={{ width: 4, height: 4, borderRadius: "50%", background: C.accent }} />}
+  </button>
+  <button onClick={() => setNav("inventory")} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "10px 4px", border: "none", background: "transparent", cursor: "pointer", gap: 3 }}>
+    <span style={{ fontSize: 20 }}>📦</span>
+    <span style={{ fontSize: 10, fontFamily: C.font, fontWeight: nav === "inventory" ? 700 : 500, color: nav === "inventory" ? C.accent : C.muted }}>Stock</span>
+    {nav === "inventory" && <div style={{ width: 4, height: 4, borderRadius: "50%", background: C.accent }} />}
+  </button>
+  <button onClick={() => setNav("expenses")} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "10px 4px", border: "none", background: "transparent", cursor: "pointer", gap: 3 }}>
+    <span style={{ fontSize: 20 }}>💸</span>
+    <span style={{ fontSize: 10, fontFamily: C.font, fontWeight: nav === "expenses" ? 700 : 500, color: nav === "expenses" ? C.accent : C.muted }}>Expenses</span>
+    {nav === "expenses" && <div style={{ width: 4, height: 4, borderRadius: "50%", background: C.accent }} />}
+  </button>
+  <button onClick={async () => { await signOut(auth); onLogout(); }} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "10px 4px", border: "none", background: "transparent", cursor: "pointer", gap: 3 }}>
+    <span style={{ fontSize: 20 }}>🚪</span>
+    <span style={{ fontSize: 10, fontFamily: C.font, fontWeight: 500, color: C.muted }}>Logout</span>
+  </button>
+</div>
 ) : MOBILE_NAV.map(n => {
 
           const isActive = n.id === "more" ? ["expenses", "ai", "feedback"].includes(nav) : nav === n.id;
