@@ -2492,7 +2492,7 @@ function JoinShopForm({ userId, onSuccess }) {
       </Btn>
     </div>
   );
-}
+} 
 
 function AppShell({ user: initialUser, onLogout }) {
   const [showJoinShop, setShowJoinShop] = useState(false);
@@ -2634,7 +2634,10 @@ const dataShopId = user.staffAccess?.shopId || null;
   const PageContent = () => (
   <>
     {isStaff ? (
-      <Sales sales={sales} setSales={setSales} products={products} setProducts={setProducts} customers={customers} user={activeUser} />
+      <>
+        {nav === "inventory" && <Inventory products={products} setProducts={setProducts} user={activeUser} isPro={true} />}
+        {nav !== "inventory" && <Sales sales={sales} setSales={setSales} products={products} setProducts={setProducts} customers={customers} user={activeUser} />}
+      </>
     ) : (
       <>
         {nav === "dashboard" && <Dashboard user={activeUser} products={products} sales={sales} customers={customers} expenses={expenses} onNav={setNav} />}
@@ -2680,6 +2683,16 @@ const dataShopId = user.staffAccess?.shopId || null;
     <div style={{ minHeight: "100vh", background: C.bg, fontFamily: C.font, paddingBottom: 70 }}>
       <Fonts />
       {showUpgrade && <UpgradeModal user={user} onUpgrade={upgrade} onClose={() => setShowUpgrade(false)} />}
+        {showJoinShop && (
+  <Modal title="Join a Shop" onClose={() => setShowJoinShop(false)}>
+    <p style={{ color: C.muted, fontSize: 14, marginBottom: 16 }}>Enter the 4-digit code your employer gave you.</p>
+    <JoinShopForm userId={userId} onSuccess={(access) => {
+      setUser(u => ({ ...u, staffAccess: access }));
+      setShowJoinShop(false);
+      window.location.reload();
+    }} />
+  </Modal>
+)}
 <ProExpiryBanner user={user} onUpgradeClick={() => setShowUpgrade(true)} />
       {showShopManager && <ShopManager user={user} shops={shops} setShops={setShops} onClose={() => setShowShopManager(false)} />}
 
@@ -2742,7 +2755,21 @@ const dataShopId = user.staffAccess?.shopId || null;
 
       {/* Bottom navigation bar */}
       <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: C.surface, borderTop: `1px solid ${C.border}`, display: "flex", zIndex: 100 }}>
-        {MOBILE_NAV.map(n => {
+        {isStaff ? (
+        <div style={{ display: "flex", width: "100%" }}>
+    <button onClick={() => setNav("sales")} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "10px 4px", border: "none", background: "transparent", cursor: "pointer", gap: 3 }}>
+      <span style={{ fontSize: 20 }}>💰</span>
+      <span style={{ fontSize: 10, fontFamily: C.font, fontWeight: nav !== "inventory" ? 700 : 500, color: nav !== "inventory" ? C.accent : C.muted }}>Sales</span>
+      {nav !== "inventory" && <div style={{ width: 4, height: 4, borderRadius: "50%", background: C.accent }} />}
+    </button>
+    <button onClick={() => setNav("inventory")} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "10px 4px", border: "none", background: "transparent", cursor: "pointer", gap: 3 }}>
+      <span style={{ fontSize: 20 }}>📦</span>
+      <span style={{ fontSize: 10, fontFamily: C.font, fontWeight: nav === "inventory" ? 700 : 500, color: nav === "inventory" ? C.accent : C.muted }}>Stock</span>
+      {nav === "inventory" && <div style={{ width: 4, height: 4, borderRadius: "50%", background: C.accent }} />}
+    </button>
+  </div>
+) : MOBILE_NAV.map(n => {
+
           const isActive = n.id === "more" ? ["expenses", "ai", "feedback"].includes(nav) : nav === n.id;
           return (
             <button key={n.id} onClick={() => n.id === "more" ? setShowMobileMenu(true) : setNav(n.id)}
