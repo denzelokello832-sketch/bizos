@@ -888,7 +888,7 @@ function Dashboard({ user, products, sales, customers, expenses, onNav }) {
   const monthSales = sales.filter(s => s.date?.startsWith(thisMonth())).reduce((sum, s) => sum + s.total, 0);
   const lowStock = products.filter(p => p.qty <= (p.lowStockAlert || 5)).length;
   const recentSales = [...sales].sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || "")).slice(0, 5);
-const recentSales = [...sales].sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || "")).slice(0, 5);
+
 const todayCashSales = sales.filter(s => s.date === today() && s.payMethod === "cash" && !s.isRefund).reduce((sum, s) => sum + s.total, 0);
 const todayCashExpenses = expenses.filter(e => e.date === today() && e.category !== "cash_in").reduce((sum, e) => sum + Number(e.amount), 0);
 const todayCashIn = expenses.filter(e => e.date === today() && e.category === "cash_in").reduce((sum, e) => sum + Number(e.amount), 0);
