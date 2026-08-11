@@ -47,7 +47,7 @@ async function saveUserData(userId, key, data) {
   } catch (e) { console.error("Save error:", e); }
 }
 
-async function getUserData(dataUserId, key, defaultVal) {
+async function getUserData(userId, key, defaultVal) {
   try {
     const snap = await getDoc(doc(db, "users", userId, "data", key));
     if (snap.exists()) return JSON.parse(snap.data().value);
@@ -93,7 +93,7 @@ async function getShopData(userId, shopId, key, defaultVal) {
     const snap = await getDoc(doc(db, "users", userId, "shops", shopId, "data", key));
     if (snap.exists()) return JSON.parse(snap.data().value);
     // Fallback to old data structure for existing users
-    return await getUserData(dataUserId, key, defaultVal);
+    return await getUserData(userId, key, defaultVal);
   } catch (e) { return defaultVal; }
 }
 
