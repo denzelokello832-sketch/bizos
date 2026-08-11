@@ -2539,7 +2539,7 @@ const dataShopId = user.staffAccess?.shopId || null;
         await saveShops(dataUserId, finalShops);
       }
       setShopsState(finalShops);
-      const shopId = finalShops[0].id;
+      const shopId = dataShopId || finalShops[0].id;
       setActiveShopId(shopId);
 
       // ── MIGRATION: move old data to new shop-based keys ──
