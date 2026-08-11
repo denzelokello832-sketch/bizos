@@ -47,7 +47,7 @@ async function saveUserData(dataUserId, key, data) {
   } catch (e) { console.error("Save error:", e); }
 }
 
-async function getUserData(userId, key, defaultVal) {
+async function getUserData(dataUserId, key, defaultVal) {
   try {
     const snap = await getDoc(doc(db, "users", userId, "data", key));
     if (snap.exists()) return JSON.parse(snap.data().value);
@@ -93,7 +93,7 @@ async function getShopData(userId, shopId, key, defaultVal) {
     const snap = await getDoc(doc(db, "users", userId, "shops", shopId, "data", key));
     if (snap.exists()) return JSON.parse(snap.data().value);
     // Fallback to old data structure for existing users
-    return await getUserData(userId, key, defaultVal);
+    return await getUserData(dataUserId, key, defaultVal);
   } catch (e) { return defaultVal; }
 }
 
@@ -2544,24 +2544,24 @@ const dataShopId = user.staffAccess?.shopId || null;
 
       // ── MIGRATION: move old data to new shop-based keys ──
       const [oldProducts, newProducts] = await Promise.all([
-        getUserData(userId, "products", null),
-        getUserData(userId, `products_${shopId}`, null),
+        getUserData(dataUserId, "products", null),
+        getUserData(dataUserId, `products_${shopId}`, null),
       ]);
       if (oldProducts && oldProducts.length > 0 && (!newProducts || newProducts.length === 0)) {
         // Migrate old data to new shop key
         await Promise.all([
           saveUserData(dataUserId, `products_${shopId}`, oldProducts),
-          saveUserData(dataUserId, `sales_${shopId}`, await getUserData(userId, "sales", [])),
-          saveUserData(dataUserId, `customers_${shopId}`, await getUserData(userId, "customers", [])),
-          saveUserData(dataUserId, `expenses_${shopId}`, await getUserData(userId, "expenses", [])),
+          saveUserData(dataUserId, `sales_${shopId}`, await getUserData(dataUserId, "sales", [])),
+          saveUserData(dataUserId, `customers_${shopId}`, await getUserData(dataUserId, "customers", [])),
+          saveUserData(dataUserId, `expenses_${shopId}`, await getUserData(dataUserId, "expenses", [])),
         ]);
       }
 
       const [p, s, c, e] = await Promise.all([
-        getUserData(userId, `products_${shopId}`, []),
-        getUserData(userId, `sales_${shopId}`, []),
-        getUserData(userId, `customers_${shopId}`, []),
-        getUserData(userId, `expenses_${shopId}`, []),
+        getUserData(dataUserId, `products_${shopId}`, []),
+        getUserData(dataUserId, `sales_${shopId}`, []),
+        getUserData(dataUserId, `customers_${shopId}`, []),
+        getUserData(dataUserId, `expenses_${shopId}`, []),
       ]);
       setProductsState(p); setSalesState(s); setCustomersState(c); setExpensesState(e);
       let currentIsPro = profile.isPro;
@@ -2583,10 +2583,10 @@ const dataShopId = user.staffAccess?.shopId || null;
     setLoading(true);
     setActiveShopId(shopId);
     const [p, s, c, e] = await Promise.all([
-      getUserData(userId, `products_${shopId}`, []),
-      getUserData(userId, `sales_${shopId}`, []),
-      getUserData(userId, `customers_${shopId}`, []),
-      getUserData(userId, `expenses_${shopId}`, []),
+      getUserData(dataUserId, `products_${shopId}`, []),
+      getUserData(dataUserId, `sales_${shopId}`, []),
+      getUserData(dataUserId, `customers_${shopId}`, []),
+      getUserData(dataUserId, `expenses_${shopId}`, []),
     ]);
     setProductsState(p); setSalesState(s); setCustomersState(c); setExpensesState(e);
     setLoading(false);
