@@ -41,7 +41,7 @@ const getRefCode = () => {
 };
 
 // ── FIREBASE HELPERS ──────────────────────────────────────────────────────────
-async function saveUserData(dataUserId, key, data) {
+async function saveUserData(userId, key, data) {
   try {
     await setDoc(doc(db, "users", userId, "data", key), { value: JSON.stringify(data), updatedAt: now() });
   } catch (e) { console.error("Save error:", e); }
@@ -76,7 +76,7 @@ async function getShops(userId) {
   } catch (e) { return []; }
 }
 
-async function saveShops(dataUserId, shops) {
+async function saveShops(userId, shops) {
   try {
     await setDoc(doc(db, "users", userId, "meta", "shops"), { list: shops, updatedAt: now() });
   } catch (e) { console.error("Save shops error:", e); }
